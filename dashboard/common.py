@@ -6,7 +6,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_ROOT = str(Path(__file__).resolve().parent.parent)
+sys.path.insert(0, _ROOT)
+# Streamlit only hot-reloads modules in the app folder or on PYTHONPATH. Adding the project root means
+# changes to tracker/ (e.g. after a git push on Streamlit Cloud) are picked up without rebooting the app.
+import os  # noqa: E402
+
+if _ROOT not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+    os.environ["PYTHONPATH"] = os.pathsep.join(p for p in [_ROOT, os.environ.get("PYTHONPATH", "")] if p)
 
 
 def _load_streamlit_secrets():
