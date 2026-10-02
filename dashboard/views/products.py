@@ -28,7 +28,7 @@ def render():
 
     name_cols = ["product_title"] if by == "Product" else ["product_title", "variant_title", "sku"]
     table = pc[name_cols + ["units", "units_returned", "net_revenue", "unit_cost", "cogs", "cm1", "cm1_pct",
-                            "alloc_fulfilment_fees", "cm2", "alloc_marketing", "cm3", "cm3_pct", "missing_cost"]]
+                            "alloc_fulfilment_fees", "cm2", "cm2_pct", "alloc_marketing", "cm3", "cm3_pct", "missing_cost"]]
     st.dataframe(table, hide_index=True, width="stretch", column_config={
         "product_title": "Product", "variant_title": "Variant", "sku": "SKU",
         "units": "Units", "units_returned": "Returned",
@@ -37,6 +37,7 @@ def render():
         "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
         "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"),
         "alloc_marketing": MONEY("Marketing (alloc.)"), "cm3": MONEY("CM3"),
+        "cm2_pct": st.column_config.NumberColumn("CM2 %", format="percent"),
         "cm3_pct": st.column_config.NumberColumn("CM3 %", format="percent"),
         "missing_cost": st.column_config.CheckboxColumn("No cost"),
     })

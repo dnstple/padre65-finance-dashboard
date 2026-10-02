@@ -239,6 +239,7 @@ class Ledger:
         g["alloc_marketing"] = marketing * share
         g["cm3"] = g["cm2"] + g["alloc_marketing"]
         g["cm1_pct"] = (g["cm1"] / g["net_revenue"]).where(g["net_revenue"] != 0)
+        g["cm2_pct"] = (g["cm2"] / g["net_revenue"]).where(g["net_revenue"] != 0)
         g["cm3_pct"] = (g["cm3"] / g["net_revenue"]).where(g["net_revenue"] != 0)
         return g.reset_index().sort_values("net_revenue", ascending=False)
 
