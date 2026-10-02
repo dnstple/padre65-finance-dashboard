@@ -8,6 +8,20 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+
+def _load_streamlit_secrets():
+    """On Streamlit Cloud settings live in st.secrets - expose them as env vars before tracker.config reads them."""
+    import os
+    try:
+        for key, value in st.secrets.items():
+            if isinstance(value, (str, int, float)) and not os.environ.get(key):
+                os.environ[key] = str(value)
+    except Exception:  # no secrets file locally - .env is used instead
+        pass
+
+
+_load_streamlit_secrets()
+
 from tracker import config, db, reports  # noqa: E402
 
 # Categorical slots, fixed order (validated palette - see dataviz reference)
@@ -98,8 +112,11 @@ def sidebar_status():
     c = conn()
     rows = c.execute("SELECT source, last_run, status, message FROM sync_log").fetchall()
     with st.sidebar.expander("Data status", expanded=False):
-        if config.DB_PATH.name != "finance.db":
-            st.warning(f"Using **{config.DB_PATH.name}**")
+        if config.DATABASE_URL:
+            host = config.DATABASE_URL.split("@")[-1].split("/")[0].split(":")[0]
+            st.caption(f"🗄️ Database: Postgres ({'Supabase' if 'supabase' in host else host})")
+        else:
+            st.warning(f"🗄️ Database: local file **{config.DB_PATH.name}**. Set DATABASE_URL to use the shared database.")
         if not rows:
             st.caption("No data synced yet - go to **Data & sync**.")
         for r in rows:
