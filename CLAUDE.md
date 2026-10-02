@@ -47,6 +47,7 @@ Without `DATABASE_URL` the app uses SQLite (`DB_PATH`). With `DATABASE_URL` set 
 - Keep SQL SQLite-style (`?` placeholders, `INSERT OR REPLACE`) — `tracker/pg.py` translates it for Postgres. New tables need an entry in `pg.PRIMARY_KEYS` (and `SERIAL_TABLES` if they use an autoincrement `id`).
 - Charts: Plotly with the fixed palette in `dashboard/common.py` (`SERIES`), one £ axis per chart, `style_fig()` for layout.
 - Money is GBP floats; display with `common.gbp()`.
+- Use `common.table()` / `common.editor()` / `common.metric()` instead of `st.dataframe` / `st.data_editor` / `st.metric` so terms get hover definitions. Add a plain-English definition to `dashboard/glossary.py` for any new column, tile or P&L line.
 - Test against demo data (`python sync.py demo`) before pointing at production.
 
 ## Safety
