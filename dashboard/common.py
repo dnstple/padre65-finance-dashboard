@@ -32,6 +32,27 @@ TYPE_LABELS = {"marketing": "Marketing", "fulfilment": "Fulfilment", "opex": "Ov
                "inventory": "Stock purchases", "other_income": "Other income", "excluded": "Excluded"}
 
 
+def require_password():
+    """Ask for DASHBOARD_PASSWORD (from secrets/.env) once per browser session. No password set = no gate."""
+    import hmac
+    import os
+
+    expected = os.environ.get("DASHBOARD_PASSWORD", "")
+    if not expected or st.session_state.get("authenticated"):
+        return
+    _, middle, _ = st.columns([1, 2, 1])
+    with middle:
+        st.title("Padre65 Finance")
+        with st.form("login"):
+            entered = st.text_input("Password", type="password")
+            if st.form_submit_button("Log in", type="primary"):
+                if hmac.compare_digest(entered.encode(), expected.encode()):
+                    st.session_state["authenticated"] = True
+                    st.rerun()
+                st.error("Incorrect password")
+    st.stop()
+
+
 def conn():
     return db.connect()
 
