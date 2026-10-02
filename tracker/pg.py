@@ -19,9 +19,9 @@ PRIMARY_KEYS = {
     "manual_transactions": ["id"], "product_costs": ["key"], "product_log": ["id"],
     "categories": ["category"], "category_rules": ["id"], "category_overrides": ["txn_id"],
     "fx_rates": ["date", "currency"], "sync_log": ["source"], "events": ["id"],
-    "event_orders": ["order_id"], "event_costs": ["txn_id"], "seeded_rules": ["pattern", "category", "direction"],
+    "event_orders": ["order_id"], "event_costs": ["txn_id"], "stock_writeoffs": ["id"], "seeded_rules": ["pattern", "category", "direction"],
 }
-SERIAL_TABLES = {"manual_transactions", "product_log", "category_rules", "events"}
+SERIAL_TABLES = {"manual_transactions", "product_log", "category_rules", "events", "stock_writeoffs"}
 
 _REPLACE = re.compile(r"^\s*INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\(([^)]*)\)", re.I | re.S)
 _IGNORE = re.compile(r"^\s*INSERT\s+OR\s+IGNORE\s+INTO\s+", re.I)

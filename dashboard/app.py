@@ -6,7 +6,7 @@ from common import require_password, sidebar_status  # noqa: E402
 
 require_password()
 
-from views import cash, data, events, expenses, manual_entry, overview, pnl, products  # noqa: E402
+from views import cash, data, events, expenses, manual_entry, overview, pnl, products, stock  # noqa: E402
 
 pages = {
     "Reports": [
@@ -14,6 +14,7 @@ pages = {
         st.Page(pnl.render, title="P&L", icon="🧾", url_path="pnl"),
         st.Page(products.render, title="Products & contribution", icon="👕", url_path="products"),
         st.Page(expenses.render, title="Expenses", icon="💸", url_path="expenses"),
+        st.Page(stock.render, title="Stock", icon="📦", url_path="stock"),
         st.Page(cash.render, title="Cash & Wise", icon="🏦", url_path="cash"),
         st.Page(events.render, title="Events & pop-ups", icon="🛍️", url_path="events"),
     ],

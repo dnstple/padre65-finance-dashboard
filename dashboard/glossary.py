@@ -87,6 +87,13 @@ GLOSSARY = {
     "Current unit cost": "Landed cost of one unit today: the latest restock/cost-change entry, or the cost sheet.",
     "Gross margin": "Gross profit as a % of net sales for this product (after discounts, using landed unit cost).",
     "In stock now": "Units of this product currently in Shopify inventory, all sizes combined.",
+    "Stock written off": "Cost of stock that can't be sold (damaged, faulty, samples, gifted), recorded on the Stock page. A real loss, but not a cash movement: the money left when the supplier was paid.",
+    "Stock bought": "Everything paid for stock at cost: supplier payments, inbound freight and import VAT, from Wise and manual entries.",
+    "Stock sold": "Cost of the items sold so far (COGS), after returns that went back into stock.",
+    "Written off": "Unusable stock recorded as a write-off. It appears in the P&L as 'Stock written off'.",
+    "Usable stock": "Units Shopify shows as in stock × their landed unit cost. Your sellable stock at cost.",
+    "Unaccounted": "Stock bought − sold − written off − usable. Usually unusable stock not yet written off, samples or gifts, or cost-sheet differences.",
+    "Stock value": "Units in stock × landed unit cost.",
     # --- headline tiles ------------------------------------------------------------
     "Contribution after marketing (CM3) tile": "CM2 minus marketing. If this is positive, sales pay for their own product, delivery and ads.",
     "Cash in Wise (GBP)": "Combined balance of the GBP accounts in Wise at the last sync.",

@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS event_orders (
 CREATE TABLE IF NOT EXISTS event_costs (
     txn_id TEXT PRIMARY KEY, event_id INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS stock_writeoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, amount REAL NOT NULL, quantity INTEGER,
+    product_id TEXT, product_title TEXT, reason TEXT, created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );

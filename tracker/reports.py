@@ -103,6 +103,9 @@ class Ledger:
         self.refunds = refunds
         self.fees = payment_fees(conn, self.orders)
         self.cash = categorise.all_cash_transactions(conn)
+        wo = db.read_df(conn, "SELECT * FROM stock_writeoffs")
+        wo["date"] = pd.to_datetime(wo["date"]) if not wo.empty else pd.Series(dtype="datetime64[ns]")
+        self.writeoffs = wo
 
     @property
     def fees_estimated(self):
@@ -148,6 +151,9 @@ class Ledger:
             shipped = ords[ords["total"] > 0].assign(v=config.PACKAGING_COST_PER_ORDER)
             add("Packaging (per-order estimate)", shipped, "v", -1)
 
+        if not self.writeoffs.empty:
+            add("Stock written off", self.writeoffs, "amount", -1)
+
         cash = self.cash
         cat_rows = {}
         for ctype in ("fulfilment", "marketing", "opex", "other_income"):
@@ -184,13 +190,14 @@ class Ledger:
         cm1 = net_rev + total(cogs_labels)
         cm2 = cm1 + total(fee_labels) + total(cat_rows.get("fulfilment", []))
         cm3 = cm2 + total(cat_rows.get("marketing", []))
-        net = cm3 + total(cat_rows.get("opex", [])) + total(cat_rows.get("other_income", []))
+        net = (cm3 + total(["Stock written off"]) + total(cat_rows.get("opex", []))
+               + total(cat_rows.get("other_income", [])))
 
         section(revenue_labels, "Net revenue", net_rev)
         section(cogs_labels, "Gross profit (CM1)", cm1)
         section(fee_labels + cat_rows.get("fulfilment", []), "Contribution after fulfilment (CM2)", cm2)
         section(cat_rows.get("marketing", []), "Contribution after marketing (CM3)", cm3)
-        section(cat_rows.get("opex", []) + cat_rows.get("other_income", []), "Net profit", net)
+        section(["Stock written off"] + cat_rows.get("opex", []) + cat_rows.get("other_income", []), "Net profit", net)
 
         result = pd.DataFrame([r[1] for r in out], index=[r[0] for r in out])
         result["Total"] = result.sum(axis=1)
@@ -242,6 +249,35 @@ class Ledger:
         g["cm2_pct"] = (g["cm2"] / g["net_revenue"]).where(g["net_revenue"] != 0)
         g["cm3_pct"] = (g["cm3"] / g["net_revenue"]).where(g["net_revenue"] != 0)
         return g.reset_index().sort_values("net_revenue", ascending=False)
+
+    def stock_check(self):
+        """Stock bought vs sold vs written off vs what Shopify says is usable, all at cost."""
+        cash = self.cash
+        bought = -cash.loc[cash["type"] == "inventory", "amount_base"].sum()
+        sold = self.lines["cogs"].fillna(0).sum()
+        if not self.refund_lines.empty:
+            sold -= self.refund_lines["cogs_reversal"].fillna(0).sum()
+        written_off = self.writeoffs["amount"].sum() if not self.writeoffs.empty else 0.0
+
+        variants = db.read_df(self.conn, "SELECT * FROM shopify_variants")
+        variants = variants[~variants["product_title"].fillna("").str.strip().str.lower().isin(config.EXCLUDE_PRODUCTS)]
+        today = pd.Timestamp.now().normalize()
+        v = variants.assign(date=today, quantity=variants["inventory_quantity"].fillna(0).clip(lower=0))
+        v = costs.unit_costs_for_lines(self.conn, v)
+        v["value"] = v["quantity"] * v["unit_cost"]
+        on_hand = (v.groupby(["product_id", "product_title"])
+                   .agg(units=("quantity", "sum"), unit_cost=("unit_cost", "max"), value=("value", "sum"),
+                        status=("product_status", "first"))
+                   .reset_index())
+        on_hand = on_hand[on_hand["units"] > 0].sort_values("value", ascending=False)
+        usable = on_hand["value"].sum()
+        uncosted_units = int(on_hand.loc[on_hand["unit_cost"].isna(), "units"].sum())
+        expected = bought - sold - written_off
+        return {
+            "bought": bought, "sold": sold, "written_off": written_off, "expected": expected,
+            "usable": usable, "gap": expected - usable, "units": int(on_hand["units"].sum()),
+            "uncosted_units": uncosted_units, "on_hand": on_hand,
+        }
 
     def cash_flow(self, start=None, end=None, freq="M"):
         cash = _in_range(self.cash, start, end)
