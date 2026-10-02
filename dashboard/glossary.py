@@ -92,7 +92,9 @@ GLOSSARY = {
     "Stock sold": "Cost of the items sold so far (COGS), after returns that went back into stock.",
     "Written off": "Unusable stock recorded as a write-off. It appears in the P&L as 'Stock written off'.",
     "Usable stock": "Units Shopify shows as in stock × their landed unit cost. Your sellable stock at cost.",
-    "Unaccounted": "Stock bought − sold − written off − usable. Usually unusable stock not yet written off, samples or gifts, or cost-sheet differences.",
+    "Unaccounted": "Stock bought − sold − written off − usable. Can be unusable stock not yet written off, payments that were really samples, or cost-sheet costs lower than actually paid.",
+    "Usable stock at full price": "Units in Shopify × their current selling price. What the stock would bring in if it all sold without discounts. Not counted as profit until it sells.",
+    "Full-price value": "Units in stock × current selling price.",
     "Stock value": "Units in stock × landed unit cost.",
     # --- headline tiles ------------------------------------------------------------
     "Contribution after marketing (CM3) tile": "CM2 minus marketing. If this is positive, sales pay for their own product, delivery and ads.",

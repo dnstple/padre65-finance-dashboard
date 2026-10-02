@@ -265,9 +265,10 @@ class Ledger:
         v = variants.assign(date=today, quantity=variants["inventory_quantity"].fillna(0).clip(lower=0))
         v = costs.unit_costs_for_lines(self.conn, v)
         v["value"] = v["quantity"] * v["unit_cost"]
+        v["retail"] = v["quantity"] * v["price"].fillna(0)
         on_hand = (v.groupby(["product_id", "product_title"])
                    .agg(units=("quantity", "sum"), unit_cost=("unit_cost", "max"), value=("value", "sum"),
-                        status=("product_status", "first"))
+                        retail=("retail", "sum"), status=("product_status", "first"))
                    .reset_index())
         on_hand = on_hand[on_hand["units"] > 0].sort_values("value", ascending=False)
         usable = on_hand["value"].sum()
@@ -275,7 +276,7 @@ class Ledger:
         expected = bought - sold - written_off
         return {
             "bought": bought, "sold": sold, "written_off": written_off, "expected": expected,
-            "usable": usable, "gap": expected - usable, "units": int(on_hand["units"].sum()),
+            "usable": usable, "retail": on_hand["retail"].sum(), "gap": expected - usable, "units": int(on_hand["units"].sum()),
             "uncosted_units": uncosted_units, "on_hand": on_hand,
         }
 

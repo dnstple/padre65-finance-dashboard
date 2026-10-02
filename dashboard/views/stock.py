@@ -24,6 +24,8 @@ def render():
     row = st.columns(3)
     metric(row[0], "Written off", gbp(k["written_off"]), "unusable stock recorded", **plain)
     metric(row[1], "Unaccounted", gbp(k["gap"]), "not yet explained", **plain)
+    metric(row[2], "Usable stock at full price", gbp(k["retail"]),
+           f"≈ {gbp(k['retail'] - k['usable'])} gross profit if sold at full price", **plain)
 
     fig = go.Figure()
     parts = [("Sold (COGS)", k["sold"], SERIES[0]), ("Usable stock", k["usable"], SERIES[2]),
@@ -40,8 +42,8 @@ def render():
     fig.update_xaxes(tickprefix="£", tickformat=",.0f")
     st.plotly_chart(fig, width="stretch")
     st.caption("Everything you've paid for stock (at cost) should be either sold, still usable in Shopify, or written off. "
-               "**Unaccounted** is what's left: usually unusable stock that hasn't been written off yet, samples or gifts, "
-               "or unit costs in the cost sheet that differ from what was actually paid.")
+               "**Unaccounted** is what's left. It can be unusable stock not yet written off, stock payments that were really "
+               "samples or development, or unit costs in the cost sheet that are lower than what was actually paid.")
     if k["uncosted_units"]:
         st.caption(f"{k['uncosted_units']} unit(s) in Shopify have no unit cost, so they're valued at £0 here.")
 
@@ -51,8 +53,8 @@ def render():
     with st.form("writeoff", clear_on_submit=True):
         a, b, d = st.columns([1, 1, 2])
         when = a.date_input("Date", date.today())
-        amount = b.number_input("Amount £ (at cost)", min_value=0.0, value=float(max(round(k["gap"], 2), 0)), step=10.0,
-                                format="%.2f", help="Pre-filled with the unaccounted amount. Change it if only part is unusable.")
+        amount = b.number_input("Amount £ (at cost)", min_value=0.0, value=0.0, step=10.0, format="%.2f",
+                                help="What the unusable stock cost you. Only write off stock you know can't be sold.")
         reason = d.text_input("Reason", placeholder="e.g. Unusable stock: misprints and faulty items")
         products = ["(whole stock / several products)"] + sorted(k["on_hand"]["product_title"].tolist())
         e, f = st.columns([3, 1])
@@ -91,6 +93,6 @@ def render():
             st.rerun()
 
     st.subheader("Usable stock by product")
-    table(k["on_hand"][["product_title", "units", "unit_cost", "value"]], hide_index=True, width="stretch", column_config={
+    table(k["on_hand"][["product_title", "units", "unit_cost", "value", "retail"]], hide_index=True, width="stretch", column_config={
         "product_title": "Product", "units": "Units", "unit_cost": MONEY("Unit cost"),
-        "value": MONEY("Stock value")})
+        "value": MONEY("Stock value"), "retail": MONEY("Full-price value")})
