@@ -1,0 +1,3 @@
+date,description,counterparty,amount,direction,category,payment_method,notes
+2026-03-14,Sample run - 20 tees,Factory Ltd,450.00,out,Inventory / Stock Purchase,Personal card,Paid before Wise account was opened
+2026-04-02,Pop-up stall fee,Spitalfields Market,120.00,out,Events & Pop-ups,Cash,

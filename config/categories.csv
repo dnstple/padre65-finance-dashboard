@@ -1,0 +1,31 @@
+category,type,notes
+Marketing - Meta Ads,marketing,Facebook / Instagram ad spend
+Marketing - Other,marketing,"Google, TikTok, influencers, PR, gifting"
+Shipping & Postage,fulfilment,Outbound postage and couriers
+Packaging,fulfilment,"Mailers, tissue, stickers, bags"
+Payment Fees,fulfilment,Card / payment processing fees not already in Shopify data
+Inventory / Stock Purchase,inventory,"Paying suppliers for stock. Cash only - P&L cost comes from product unit costs as items sell"
+Freight & Duties (Stock),inventory,Inbound freight and import duty on stock - include in unit cost
+Branding & Design,opex,"Logo, brand identity and graphic design"
+Samples & Development,opex,"Samples, sampling, design development"
+Photography & Content,opex,"Shoots, models, content creation"
+Shopify & Apps,opex,Shopify subscription and apps
+Software & Subscriptions,opex,Other software
+Professional Fees,opex,"Accountant, legal, Companies House"
+Contractors & Wages,opex,People costs
+Events & Pop-ups,opex,"Stalls, pop-ups, events"
+Travel,opex,Travel and subsistence
+Office & Sundries,opex,General costs
+Bank Fees,opex,Wise and other bank fees
+Other Expense,opex,Anything else
+Other Sales (non-Shopify),other_income,"Sales taken outside Shopify, e.g. Stripe or PayPal"
+Other Income,other_income,"Interest, cashback and other non-sales income"
+Shopify Payout,excluded,Shopify payouts into Wise - revenue already counted from Shopify orders
+Internal Transfer,excluded,Moving money between your own balances / accounts
+Owner Investment,excluded,Money put into the business by owners
+Owner Drawings,excluded,Money taken out by owners
+Owner Reimbursement,excluded,"Paying an owner back for business costs they paid personally - log the underlying costs as manual transactions"
+Tax Payments,excluded,"HMRC / VAT / corporation tax payments"
+Loan,excluded,Loan received or repaid
+Uncategorised,opex,Money out that needs a category (counted as an expense until categorised)
+Uncategorised Income,excluded,Money in that needs a category (left out of profit until categorised)

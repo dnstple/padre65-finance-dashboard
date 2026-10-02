@@ -1,0 +1,18 @@
+priority,pattern,category,direction,field
+10,^(CONVERSION|INCOMING_CROSS_BALANCE|OUTGOING_CROSS_BALANCE|INTERBALANCE)$,Internal Transfer,any,detail_type
+10,^(BALANCE_INTEREST|CARD_CASHBACK|ASSETS_DISTRIBUTION)$,Other Income,any,detail_type
+10,^(ACCRUAL_CHARGE|FEE|BALANCE_ASSET_FEE|BANK_DETAILS_ORDER)$,Bank Fees,out,detail_type
+20,shopify,Shopify Payout,in,text
+20,stripe|paypal|sumup|square,Other Sales (non-Shopify),in,text
+20,facebk|facebook|meta platforms|meta ads|metapay|instagram,Marketing - Meta Ads,out,text
+20,google\s*\*?ads|google ads|tiktok|pinterest|snapchat|eventbrite ad,Marketing - Other,out,text
+20,shopify,Shopify & Apps,out,text
+20,royal mail|click ?& ?drop|evri|hermes|dpd|dhl|\bups\b|parcel2go|parcel ?hero|parcelforce|inpost|fedex|yodel|post office|4filment,Shipping & Postage,out,text
+20,packhelp|noissue|raja|packaging|mailer|tiny box|paper bag|unpakful|stickerapp,Packaging,out,text
+20,canva|adobe|google \*?(gsuite|workspace)|google workspace|notion|slack|klaviyo|mailchimp|openai|anthropic|\bclaude\b|dropbox|squarespace|godaddy|apple\.com/bill,Software & Subscriptions,out,text
+20,upwork|fiverr,Contractors & Wages,out,text
+20,uber|trainline|\btfl\b|ryanair|easyjet|british airways|airbnb|booking\.com|lner|avanti|kiwi\.com|enterprise,Travel,out,text
+20,create fashion brand,Samples & Development,out,text
+20,xiangtong|xiangto,Inventory / Stock Purchase,out,text
+20,hmrc,Tax Payments,any,text
+20,companies house,Professional Fees,out,text

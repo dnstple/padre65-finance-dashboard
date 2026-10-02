@@ -1,0 +1,32 @@
+name: Daily data sync
+
+on:
+  schedule:
+    - cron: "0 5 * * *"   # 05:00 UTC every day (06:00 UK summer time)
+  workflow_dispatch:       # "Run workflow" button in the Actions tab
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Sync Shopify, Wise and product costs
+        run: python sync.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WISE_API_TOKEN: ${{ secrets.WISE_API_TOKEN }}
+          WISE_PRIVATE_KEY: ${{ secrets.WISE_PRIVATE_KEY }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_STORE }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          COSTS_SHEET_URL: ${{ secrets.COSTS_SHEET_URL }}

@@ -1,0 +1,12 @@
+# Secrets
+.env
+keys/
+.streamlit/secrets.toml
+
+# Local data (real financial data lives in the database, not the repo)
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
