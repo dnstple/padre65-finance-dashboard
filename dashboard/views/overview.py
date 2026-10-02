@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, bar_line_chart, conn, gbp, ledger, pct, period_filter, style_fig
+from common import SERIES, bar_line_chart, conn, gbp, ledger, metric, pct, period_filter, style_fig, table
 
 
 def _row(p, label):
@@ -37,13 +37,13 @@ def render():
         return pct(v / net_rev if net_rev else None) + " margin"
 
     c = st.columns(3)
-    c[0].metric("Net revenue", gbp(net_rev), "by month", chart_data=monthly["Net revenue"].round(0).tolist(), **spark, **plain_delta)
-    c[1].metric("Gross profit (CM1)", gbp(cm1), margin(cm1), chart_data=monthly["Gross profit (CM1)"].round(0).tolist(), **spark, **plain_delta)
-    c[2].metric("Net profit", gbp(net), margin(net), chart_data=monthly["Net profit"].round(0).tolist(), **spark, **plain_delta)
+    metric(c[0], "Net revenue", gbp(net_rev), "by month", chart_data=monthly["Net revenue"].round(0).tolist(), **spark, **plain_delta)
+    metric(c[1], "Gross profit (CM1)", gbp(cm1), margin(cm1), chart_data=monthly["Gross profit (CM1)"].round(0).tolist(), **spark, **plain_delta)
+    metric(c[2], "Net profit", gbp(net), margin(net), chart_data=monthly["Net profit"].round(0).tolist(), **spark, **plain_delta)
     c = st.columns(3)
-    c[0].metric("Contribution after marketing (CM3)", gbp(cm3), margin(cm3), **plain)
-    c[1].metric("Orders", f"{len(paid)}", gbp(paid["total"].mean() if len(paid) else None, 2) + " average order", **plain)
-    c[2].metric("Cash in Wise (GBP)", gbp(balances), "as of last sync", **plain)
+    metric(c[0], "Contribution after marketing (CM3)", gbp(cm3), margin(cm3), **plain)
+    metric(c[1], "Orders", f"{len(paid)}", gbp(paid["total"].mean() if len(paid) else None, 2) + " average order", **plain)
+    metric(c[2], "Cash in Wise (GBP)", gbp(balances), "as of last sync", **plain)
 
     _attention(L)
 
@@ -70,7 +70,7 @@ def render():
     st.subheader("Top products")
     pc = L.product_contribution(start, end).head(8)
     if not pc.empty:
-        st.dataframe(
+        table(
             pc[["product_title", "units", "net_revenue", "cogs", "cm1", "cm1_pct", "cm3"]],
             hide_index=True, width="stretch",
             column_config={

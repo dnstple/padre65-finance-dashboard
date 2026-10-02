@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from common import conn, gbp
+from common import conn, editor, gbp
 from tracker import categorise, config, db, manual
 
 
@@ -39,7 +39,7 @@ def render():
         total_in = df.loc[df["direction"] == "in", "amount"].sum()
         st.caption(f"Out: {gbp(total_out, 2)} · In: {gbp(total_in, 2)}. Edit cells or select rows and delete, then save.")
         df["date"] = pd.to_datetime(df["date"]).dt.date
-        edited = st.data_editor(df, hide_index=True, width="stretch", num_rows="dynamic", key="manual_editor",
+        edited = editor(df, hide_index=True, width="stretch", num_rows="dynamic", key="manual_editor",
                                 column_config={
                                     "id": None,
                                     "date": st.column_config.DateColumn("Date", format="D MMM YYYY", required=True),

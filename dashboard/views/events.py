@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, ledger, pct, style_fig
+from common import SERIES, conn, gbp, ledger, metric, pct, style_fig, table
 from tracker import events
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -35,18 +35,18 @@ def render():
     st.caption(" · ".join(x for x in [ev.get("location"), ev.get("notes")] if x))
 
     row = st.columns(4)
-    row[0].metric("Net sales", gbp(k["net"]), f"{gbp(k['gross'])} gross",
+    metric(row[0], "Net sales", gbp(k["net"]), f"{gbp(k['gross'])} gross",
                   delta_color="off", delta_arrow="off", border=True)
-    row[1].metric("Orders", k["orders"], f"{gbp(k['aov'])} AOV", delta_color="off", delta_arrow="off", border=True)
-    row[2].metric("Units sold", k["units"], f"{k['units_per_order']:.2f} per order", delta_color="off", delta_arrow="off", border=True)
-    row[3].metric("Avg unit price", gbp(k["avg_unit_price"]), f"{pct(k['discount_rate'])} discounted",
+    metric(row[1], "Orders", k["orders"], f"{gbp(k['aov'])} AOV", delta_color="off", delta_arrow="off", border=True)
+    metric(row[2], "Units sold", k["units"], f"{k['units_per_order']:.2f} per order", delta_color="off", delta_arrow="off", border=True)
+    metric(row[3], "Avg unit price", gbp(k["avg_unit_price"]), f"{pct(k['discount_rate'])} discounted",
                   delta_color="off", delta_arrow="off", border=True)
     row = st.columns(4)
-    row[0].metric("Gross profit", gbp(k["gross_profit"]), pct(k["gross_profit"] / k["net"] if k["net"] else None) + " margin",
+    metric(row[0], "Gross profit", gbp(k["gross_profit"]), pct(k["gross_profit"] / k["net"] if k["net"] else None) + " margin",
                   delta_color="off", delta_arrow="off", border=True)
-    row[1].metric("Card fees" + (" (est.)" if R.fees_estimated else ""), gbp(k["card_fees"]), border=True)
-    row[2].metric("Event costs", gbp(k["event_costs"]), "tagged below", delta_color="off", delta_arrow="off", border=True)
-    row[3].metric("Event profit", gbp(k["event_profit"]), "after all costs", delta_color="off",
+    metric(row[1], "Card fees" + (" (est.)" if R.fees_estimated else ""), gbp(k["card_fees"]), border=True)
+    metric(row[2], "Event costs", gbp(k["event_costs"]), "tagged below", delta_color="off", delta_arrow="off", border=True)
+    metric(row[3], "Event profit", gbp(k["event_profit"]), "after all costs", delta_color="off",
                   delta_arrow="off", border=True)
     if k["missing_cost_units"]:
         st.caption(f"{k['missing_cost_units']} unit(s) have no unit cost (e.g. custom-amount sales), so they count as 100% margin.")
@@ -58,7 +58,7 @@ def render():
 
     st.subheader("By day")
     days = R.by_day()
-    st.dataframe(days[["day", "orders", "units", "gross", "discounts", "net", "share", "aov", "first", "last",
+    table(days[["day", "orders", "units", "gross", "discounts", "net", "share", "aov", "first", "last",
                        "trading_hrs", "net_per_hr", "gross_profit"]], hide_index=True, width="stretch", column_config={
         "day": "Day", "orders": "Orders", "units": "Units", "gross": MONEY("Gross"), "discounts": MONEY("Discounts"),
         "net": MONEY("Net sales"), "share": PCT("% of net"), "aov": MONEY("AOV"),
@@ -100,11 +100,11 @@ def render():
                    "cogs": MONEY("Stock cost"), "gross_profit": MONEY("Gross profit"), "margin": PCT("Margin")}
     with tab_p:
         p = R.by(["product_title", "category"])
-        st.dataframe(p[["product_title", "category"] + list(profit_cols)], hide_index=True, width="stretch",
+        table(p[["product_title", "category"] + list(profit_cols)], hide_index=True, width="stretch",
                      column_config={"product_title": "Product", "category": "Category", **profit_cols})
     with tab_s:
         s = R.by("style")
-        st.dataframe(s[["style"] + list(profit_cols)], hide_index=True, width="stretch",
+        table(s[["style"] + list(profit_cols)], hide_index=True, width="stretch",
                      column_config={"style": "Style (all colourways)", **profit_cols})
     with tab_size:
         a, b = st.columns([2, 3])
@@ -118,28 +118,28 @@ def render():
             st.plotly_chart(fig, width="stretch")
         with b:
             st.markdown("**Units by style × size**")
-            st.dataframe(R.style_by_size(), width="stretch")
+            table(R.style_by_size(), width="stretch")
         st.caption("Numeric sizes are waist sizes (jeans). One-size items (caps, foulards) are excluded from the curve.")
     with tab_c:
         col = R.by("colour_family")
-        st.dataframe(col[["colour_family", "units", "net", "share", "gross_profit", "margin"]], hide_index=True, width="stretch",
+        table(col[["colour_family", "units", "net", "share", "gross_profit", "margin"]], hide_index=True, width="stretch",
                      column_config={"colour_family": "Colour family", **profit_cols})
     with tab_b:
         a, b = st.columns(2)
         with a:
             st.markdown("**Basket size**")
-            st.dataframe(R.baskets(), hide_index=True, width="stretch", column_config={
+            table(R.baskets(), hide_index=True, width="stretch", column_config={
                 "basket": "Basket", "orders": "Orders", "units": "Units", "net": MONEY("Net sales"),
                 "share_orders": PCT("% of orders"), "aov": MONEY("AOV")})
         with b:
             st.markdown("**Full price vs discounted**")
-            st.dataframe(R.pricing(), hide_index=True, width="stretch", column_config={
+            table(R.pricing(), hide_index=True, width="stretch", column_config={
                 "pricing": "Pricing", "orders": "Orders", "net": MONEY("Net sales"), "discounts": MONEY("Discounts"),
                 "aov": MONEY("AOV"), "share_orders": PCT("% of orders")})
 
     if not R.costs.empty:
         st.subheader("Event costs")
-        st.dataframe(R.costs[["date", "counterparty", "category", "amount_base", "source"]], hide_index=True, width="stretch",
+        table(R.costs[["date", "counterparty", "category", "amount_base", "source"]], hide_index=True, width="stretch",
                      column_config={"date": st.column_config.DatetimeColumn("Date", format="D MMM YYYY"),
                                     "counterparty": "Payee", "category": "Category", "amount_base": MONEY("Amount"),
                                     "source": "Source"})

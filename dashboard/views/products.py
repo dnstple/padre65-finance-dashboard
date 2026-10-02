@@ -4,7 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, ledger, pct, period_filter, style_fig
+from common import SERIES, conn, editor, gbp, ledger, metric, pct, period_filter, style_fig, table
+from glossary import GLOSSARY
 from tracker import db
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -27,12 +28,12 @@ def render():
                    "Add costs on **Data & sync**.")
 
     name_cols = ["product_title"] if by == "Product" else ["product_title", "variant_title", "sku"]
-    table = pc[name_cols + ["units", "units_returned", "net_revenue", "unit_cost", "cogs", "cm1", "cm1_pct",
+    contribution = pc[name_cols + ["units", "units_returned", "net_revenue", "unit_cost", "cogs", "cm1", "cm1_pct",
                             "alloc_fulfilment_fees", "cm2", "cm2_pct", "alloc_marketing", "cm3", "cm3_pct", "missing_cost"]]
-    st.dataframe(table, hide_index=True, width="stretch", column_config={
+    table(contribution, hide_index=True, width="stretch", column_config={
         "product_title": "Product", "variant_title": "Variant", "sku": "SKU",
         "units": "Units", "units_returned": "Returned",
-        "net_revenue": MONEY("Net revenue"), "unit_cost": MONEY("Unit cost"), "cogs": MONEY("COGS"),
+        "net_revenue": st.column_config.NumberColumn("Net revenue", format="£%.2f", help=GLOSSARY["Net revenue (product)"]), "unit_cost": MONEY("Unit cost"), "cogs": MONEY("COGS"),
         "cm1": MONEY("Gross profit (CM1)"),
         "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
         "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"),
@@ -80,11 +81,11 @@ def _product_detail(L):
     lines = L.lines[L.lines["product_id"] == pid]
     cost_row = c.execute("SELECT unit_cost, collection, notes FROM product_costs WHERE key = ?", (f"product:{pid}",)).fetchone()
     k = st.columns(5)
-    k[0].metric("Units sold (all time)", int(lines["quantity"].sum()))
-    k[1].metric("Net revenue", gbp(lines["net"].sum()))
-    k[2].metric("Current unit cost", gbp(cost_row["unit_cost"], 2) if cost_row else "Not set")
-    k[3].metric("Gross margin", pct((lines["net"].sum() - lines["cogs"].sum()) / lines["net"].sum()) if lines["net"].sum() else "–")
-    k[4].metric("In stock now", int(prod["stock"] or 0))
+    metric(k[0], "Units sold (all time)", int(lines["quantity"].sum()))
+    metric(k[1], "Net revenue", gbp(lines["net"].sum()))
+    metric(k[2], "Current unit cost", gbp(cost_row["unit_cost"], 2) if cost_row else "Not set")
+    metric(k[3], "Gross margin", pct((lines["net"].sum() - lines["cogs"].sum()) / lines["net"].sum()) if lines["net"].sum() else "–")
+    metric(k[4], "In stock now", int(prod["stock"] or 0))
 
     left, right = st.columns([3, 2])
     with left:
@@ -96,7 +97,7 @@ def _product_detail(L):
             fig.update_layout(title=dict(text="Units sold by month", font=dict(size=14)))
             st.plotly_chart(fig, width="stretch")
         stock = variants[variants["product_id"] == pid][["variant_title", "sku", "price", "inventory_quantity"]]
-        st.dataframe(stock, hide_index=True, width="stretch", column_config={
+        table(stock, hide_index=True, width="stretch", column_config={
             "variant_title": "Variant", "sku": "SKU", "price": MONEY("Price"), "inventory_quantity": "In stock"})
 
     with right:
@@ -124,7 +125,7 @@ def _product_detail(L):
     if log.empty:
         st.caption("No entries yet. Log restocks, cost changes and notes here.")
     else:
-        edited = st.data_editor(log, hide_index=True, width="stretch", num_rows="dynamic", key=f"log_{pid}",
+        edited = editor(log, hide_index=True, width="stretch", num_rows="dynamic", key=f"log_{pid}",
                                 disabled=["id"], column_config={
                                     "id": None, "event": st.column_config.SelectboxColumn("Type", options=["restock", "cost_change", "note"]),
                                     "unit_cost": MONEY("Unit cost"), "total_cost": MONEY("Total cost")})

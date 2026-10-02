@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-from common import ledger, period_filter, pnl_table
+from common import category_notes, ledger, period_filter, report_table
 
 FREQS = {"Monthly": "M", "Quarterly": "Q", "Yearly": "Y"}
 
@@ -18,7 +18,8 @@ def render():
         st.info("No data for this period.")
         return
 
-    st.dataframe(pnl_table(p), width="stretch", height=min(38 * (len(p) + 1) + 4, 1100))
+    st.caption("Hover over an underlined line to see what it means.")
+    report_table(p, subtotals=p.attrs.get("subtotals", []), definitions=category_notes())
 
     rev = p.loc["Net revenue"].replace(0, pd.NA)
     margins = pd.DataFrame({
@@ -30,7 +31,7 @@ def render():
         ]
     }).T
     st.caption("Margins")
-    st.dataframe(margins.map(lambda v: "–" if pd.isna(v) else f"{v:.1%}"), width="stretch")
+    report_table(margins, fmt=lambda v: "–" if pd.isna(v) else f"{v:.1%}")
 
     with st.expander("How this P&L is built"):
         st.markdown("""

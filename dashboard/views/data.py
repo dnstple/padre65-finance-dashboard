@@ -3,7 +3,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from common import conn, ledger
+from common import conn, editor, ledger, table
 from tracker import categorise, config, costs, db
 
 
@@ -37,7 +37,7 @@ def render():
     missing = L.missing_cost_lines
     if len(missing):
         st.warning(f"{missing['product_title'].nunique()} sold products have no unit cost.")
-        st.dataframe(missing.groupby("product_title")["quantity"].sum().sort_values(ascending=False).reset_index(),
+        table(missing.groupby("product_title")["quantity"].sum().sort_values(ascending=False).reset_index(),
                      hide_index=True, column_config={"product_title": "Product", "quantity": "Units sold"})
     if config.COSTS_SHEET_URL:
         st.markdown(f"Costs come from your [Google Sheet]({config.COSTS_SHEET_URL}) and refresh on every full sync.")
@@ -64,7 +64,7 @@ def render():
     current = db.read_df(c, "SELECT key, product_title, variant_title, collection, unit_cost, notes, updated_at FROM product_costs ORDER BY product_title")
     if not current.empty:
         st.caption("Current unit costs. Edit here for quick fixes and log restock cost changes on the Products page.")
-        edited = st.data_editor(current, hide_index=True, width="stretch", key="cost_editor",
+        edited = editor(current, hide_index=True, width="stretch", key="cost_editor",
                                 disabled=["key", "product_title", "variant_title", "updated_at"],
                                 column_config={"key": None, "unit_cost": st.column_config.NumberColumn("Unit cost", format="£%.2f")})
         if st.button("Save cost changes"):
@@ -77,9 +77,9 @@ def render():
 
     st.divider()
     with st.expander("Categories & rules"):
-        st.dataframe(categorise.categories(c), hide_index=True, width="stretch")
+        table(categorise.categories(c), hide_index=True, width="stretch")
         rules = db.read_df(c, "SELECT id, priority, pattern, category, direction, field FROM category_rules ORDER BY priority, id")
-        edited = st.data_editor(rules, hide_index=True, width="stretch", num_rows="dynamic", key="rules_editor",
+        edited = editor(rules, hide_index=True, width="stretch", num_rows="dynamic", key="rules_editor",
                                 column_config={"id": None,
                                                "category": st.column_config.SelectboxColumn("Category", options=categorise.categories(c)["category"].tolist()),
                                                "direction": st.column_config.SelectboxColumn("Direction", options=["any", "in", "out"]),

@@ -116,17 +116,74 @@ def bar_line_chart(df, x, bars, line=None):
     return style_fig(fig)
 
 
-def pnl_table(p):
-    """Format a P&L frame for display, with subtotal rows highlighted."""
-    subtotals = p.attrs.get("subtotals", [])
-    shown = p.map(lambda v: gbp(v))
+def category_notes():
+    """Expense category -> description, used as hover definitions."""
+    from tracker import categorise
+    cats = categorise.categories(conn())
+    return dict(zip(cats["category"], cats["notes"].fillna("")))
 
-    def highlight(row):
-        if row.name in subtotals:
-            return ["font-weight: 700; background-color: rgba(42,120,214,0.10)"] * len(row)
-        return [""] * len(row)
 
-    return shown.style.apply(highlight, axis=1)
+def add_help(df, column_config=None):
+    """Attach glossary definitions to column headers (shown on hover)."""
+    from glossary import define
+    cfg = dict(column_config or {})
+    for col in df.columns:
+        if col in cfg and cfg[col] is None:  # hidden column
+            continue
+        current = cfg.get(col)
+        if current is None or isinstance(current, str):
+            label = current or str(col)
+            tip = define(label)
+            if tip:
+                cfg[col] = st.column_config.Column(label, help=tip)
+        elif isinstance(current, dict) and not current.get("help"):
+            tip = define(current.get("label") or str(col))
+            if tip:
+                cfg[col] = {**current, "help": tip}
+    return cfg
+
+
+def metric(container, label, *args, **kwargs):
+    """st.metric with the glossary definition shown on hover (the tile's ? icon)."""
+    from glossary import define
+    kwargs.setdefault("help", define(label))
+    return container.metric(label, *args, **kwargs)
+
+
+def table(df, column_config=None, **kwargs):
+    """st.dataframe with hover definitions on the column headers."""
+    return st.dataframe(df, column_config=add_help(df, column_config), **kwargs)
+
+
+def editor(df, column_config=None, **kwargs):
+    """st.data_editor with hover definitions on the column headers."""
+    return st.data_editor(df, column_config=add_help(df, column_config), **kwargs)
+
+
+def report_table(df, subtotals=(), fmt=None, definitions=None):
+    """Static report table (e.g. the P&L) where each row label shows its definition on hover."""
+    import html as h
+
+    from glossary import define
+    fmt = fmt or gbp
+    cell = "padding:6px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid rgba(128,128,128,0.18);"
+    first = "padding:6px 12px; text-align:left; white-space:nowrap; border-bottom:1px solid rgba(128,128,128,0.18);"
+    head = "".join(f'<th style="{cell} font-weight:600; opacity:0.75;">{h.escape(str(c))}</th>' for c in df.columns)
+    body = []
+    for label, row in df.iterrows():
+        tip = define(str(label), definitions)
+        name = h.escape(str(label))
+        if tip:
+            name = (f'<span title="{h.escape(tip)}" style="text-decoration:underline dotted; '
+                    f'text-underline-offset:3px; cursor:help;">{name}</span>')
+        style = "font-weight:700; background:rgba(42,120,214,0.10);" if label in subtotals else ""
+        values = "".join(f'<td style="{cell}">{fmt(v)}</td>' for v in row)
+        body.append(f'<tr style="{style}"><td style="{first}">{name}</td>{values}</tr>')
+    st.html(
+        '<div style="overflow-x:auto; border:1px solid rgba(128,128,128,0.25); border-radius:8px;">'
+        '<table style="border-collapse:collapse; width:100%; font-size:14px; font-variant-numeric:tabular-nums;">'
+        f'<thead><tr><th style="{first}"></th>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
+    )
 
 
 def sidebar_status():

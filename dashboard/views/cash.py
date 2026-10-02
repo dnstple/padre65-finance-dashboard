@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, ledger, period_filter, style_fig
+from common import SERIES, conn, gbp, ledger, period_filter, style_fig, table
 from tracker import db
 
 
@@ -67,7 +67,7 @@ def render():
         (st.success if missing.empty else st.warning)(
             f"{len(payouts) - len(missing)} of {len(payouts)} payouts matched to a Wise deposit." +
             (f" {len(missing)} not found ({gbp(missing['net'].sum(), 2)})." if len(missing) else ""))
-        st.dataframe(payouts[["date", "net", "status", "matched_wise_date", "status_check"]], hide_index=True, width="stretch",
+        table(payouts[["date", "net", "status", "matched_wise_date", "status_check"]], hide_index=True, width="stretch",
                      column_config={"date": st.column_config.DatetimeColumn("Payout date", format="D MMM YYYY"),
                                     "net": st.column_config.NumberColumn("Amount", format="£%.2f"),
                                     "matched_wise_date": st.column_config.DatetimeColumn("Arrived in Wise", format="D MMM YYYY"),

@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import TYPE_COLORS, TYPE_LABELS, conn, gbp, ledger, period_filter, style_fig
+from common import TYPE_COLORS, TYPE_LABELS, conn, editor, gbp, ledger, metric, period_filter, style_fig, table
 from tracker import categorise
 
 
@@ -24,7 +24,7 @@ def render():
 
     k = st.columns(4)
     for i, t in enumerate(["marketing", "fulfilment", "opex", "inventory"]):
-        k[i].metric(TYPE_LABELS[t], gbp(spend.loc[spend["type"] == t, "cost"].sum()))
+        metric(k[i], TYPE_LABELS[t], gbp(spend.loc[spend["type"] == t, "cost"].sum()))
 
     st.subheader("Spend by month")
     show_stock = st.toggle("Include stock purchases", value=False,
@@ -46,12 +46,12 @@ def render():
         st.subheader("By category")
         by_cat = (spend.groupby(["category", "type"])["cost"].sum().reset_index().sort_values("cost", ascending=False))
         by_cat["type"] = by_cat["type"].map(TYPE_LABELS)
-        st.dataframe(by_cat, hide_index=True, width="stretch", column_config={
+        table(by_cat, hide_index=True, width="stretch", column_config={
             "category": "Category", "type": "Group", "cost": st.column_config.NumberColumn("Spend", format="£%.2f")})
     with right:
         st.subheader("Top payees")
         payees = spend.groupby("counterparty")["cost"].agg(["sum", "count"]).sort_values("sum", ascending=False).head(15).reset_index()
-        st.dataframe(payees, hide_index=True, width="stretch", column_config={
+        table(payees, hide_index=True, width="stretch", column_config={
             "counterparty": "Payee", "sum": st.column_config.NumberColumn("Spend", format="£%.2f"), "count": "Payments"})
 
     st.divider()
@@ -79,7 +79,7 @@ def _review(L):
     tx = tx.sort_values("date", ascending=False)[["id", "date", "counterparty", "description", "amount_base", "source", "category"]]
     st.caption(f"{len(tx)} transactions")
 
-    edited = st.data_editor(tx, hide_index=True, width="stretch", key="rev_editor",
+    edited = editor(tx, hide_index=True, width="stretch", key="rev_editor",
                             disabled=["id", "date", "counterparty", "description", "amount_base", "source"],
                             column_config={
                                 "id": None, "date": st.column_config.DatetimeColumn("Date", format="D MMM YYYY"),
