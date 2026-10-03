@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, heading, ledger, metric, pct, style_fig, table
+from common import SERIES, conn, editor, gbp, heading, ledger, metric, pct, style_fig, table
 from tracker import events, planner
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -34,12 +34,18 @@ def render():
     st.caption(f"Forecast from {s['last_orders']} orders / {s['last_units']} units at **{s['event']['name']}**, scaled to "
                f"{scale:.0%}, plus a {buffer:.0%} buffer. Compared with current Shopify stock.")
 
+    plan_rows = planner.restock_plan(c, in_plan)
+    final_units, final_cost = int(plan_rows["final_buy"].sum()), float(plan_rows["final_cost"].sum())
+    changed = bool((~plan_rows["include"]).any() or plan_rows["buy_override"].notna().any())
     plain = dict(delta_color="off", delta_arrow="off", border=True)
     row = st.columns(2)
     metric(row[0], "Stock readiness", pct(s["readiness"]), f"{s['covered_units']} of {s['target_units']} target units in stock", **plain)
-    metric(row[1], "Units to buy", f"{s['to_buy_units']}", f"across {int((buy_list['to_buy'] > 0).sum())} product sizes", **plain)
+    metric(row[1], "Units to buy", f"{final_units}",
+           f"suggested {s['to_buy_units']}" if changed else f"across {int((plan_rows['final_buy'] > 0).sum())} product sizes",
+           **plain)
     row = st.columns(2)
-    metric(row[0], "Cost to restock", gbp(s["buy_cost"]), "at landed unit cost", **plain)
+    metric(row[0], "Cost to restock", gbp(final_cost),
+           f"suggested {gbp(s['buy_cost'])}" if changed else "at landed unit cost", **plain)
     metric(row[1], "Expected pop-up sales", gbp(s["expected_sales"]),
            f"≈ {gbp(s['expected_gross_profit'])} gross profit", **plain)
     if s["uncosted_to_buy"]:
@@ -47,13 +53,16 @@ def render():
 
     heading("Stock vs target by product")
     st.caption("🔴 Restock: none in stock · 🟠 Top up: some sizes short · 🟢 Ready: enough stock · 🔵 Plenty: at least 2× the target, so push these.")
-    shown = products.assign(status=products["status"].map(STATUS_ICON))
-    table(shown[["status", "product_title", "category", "sold_last", "on_hand", "expected", "target", "to_buy", "buy_cost"]],
+    mine = plan_rows.groupby("product_id")[["final_buy", "final_cost"]].sum()
+    shown = products.assign(status=products["status"].map(STATUS_ICON)).join(mine, on="product_id")
+    table(shown[["status", "product_title", "category", "sold_last", "on_hand", "expected", "target", "to_buy",
+                 "final_buy", "final_cost"]],
           hide_index=True, width="stretch", column_config={
               "status": "Status", "product_title": "Product", "category": "Category",
               "sold_last": "Sold last time", "on_hand": "In stock",
               "expected": st.column_config.NumberColumn("Expected sales", format="%.1f"),
-              "target": "Target stock", "to_buy": "To buy", "buy_cost": MONEY("Cost to buy")})
+              "target": "Target stock", "to_buy": "Suggested buy", "final_buy": "Final buy",
+              "final_cost": MONEY("Cost")})
 
     left, right = st.columns([3, 2])
     with left:
@@ -64,7 +73,7 @@ def render():
             st.dataframe(grid, width="stretch")
     with right:
         heading("Where the restock money goes")
-        spend = products[products["buy_cost"] > 0].groupby("category")["buy_cost"].sum().sort_values()
+        spend = plan_rows[plan_rows["final_cost"] > 0].groupby("category")["final_cost"].sum().sort_values()
         if spend.empty:
             st.success("Nothing to buy: current stock covers the plan.")
         else:
@@ -77,19 +86,7 @@ def render():
             fig.update_yaxes(tickprefix="", showgrid=False)
             st.plotly_chart(fig, width="stretch")
 
-    heading("Buy list")
-    if buy_list.empty:
-        st.success("Nothing to buy.")
-    else:
-        table(buy_list, hide_index=True, width="stretch", column_config={
-            "product_title": "Product", "size": "Size", "sku": "SKU", "on_hand": "In stock",
-            "expected": st.column_config.NumberColumn("Expected sales", format="%.1f"), "target": "Target stock",
-            "to_buy": "To buy", "unit_cost": MONEY("Unit cost"), "buy_cost": MONEY("Cost to buy")})
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as xl:
-            buy_list.to_excel(xl, sheet_name="Buy list", index=False)
-            products.to_excel(xl, sheet_name="By product", index=False)
-        st.download_button("Download buy list (Excel)", buf.getvalue(), file_name="popup_buy_list.xlsx")
+    _plan_editor(c, plan_rows, products)
 
     if not not_sold.empty:
         heading("In stock but didn't sell last time")
@@ -114,3 +111,75 @@ def render():
   - Supplier minimum order quantities and lead times aren't included. A size needing 2 units may only be orderable in a batch of 10.
   - Products that didn't sell last time get no forecast.
 """)
+
+
+PLAN_COLUMNS = ["rank", "include", "product_title", "size", "sold_all_time", "on_hand", "suggested", "buy_override",
+                "final_buy", "final_cost", "target", "product_sold_all_time", "sold_last"]
+
+
+def _plan_editor(c, plan_rows, products):
+    heading("Restock plan by size")
+    st.caption("Ranked by how much each product has sold overall (online + in person), most in demand first. "
+               "Untick **Include** to leave a size out of the totals. Type a number in **Your buy** to override the "
+               "suggestion, or clear it to go back. Changes save automatically and are shared with everyone using the dashboard.")
+    a, b = st.columns([3, 1])
+    only_needed = a.toggle("Only show sizes with something to buy", value=False, key="plan_only_needed",
+                           help="Hide sizes where both the suggestion and your override are zero.")
+    if b.button("Reset to suggestions", help="Tick every row again and clear all your overrides."):
+        planner.reset_choices(c)
+        st.session_state["plan_ver"] = st.session_state.get("plan_ver", 0) + 1
+        st.rerun()
+
+    rows = plan_rows
+    if only_needed:
+        rows = rows[(rows["suggested"] > 0) | (rows["buy_override"].fillna(0) > 0)]
+    rows = rows.reset_index(drop=True)
+    key = f"plan_editor_{st.session_state.get('plan_ver', 0)}"
+    ids = rows["variant_id"].tolist()
+    base_include = rows["include"].tolist()
+    base_override = rows["buy_override"].tolist()
+
+    def save():
+        """Persist ticks/overrides, then rebuild the table so final buy and cost update."""
+        changes = []
+        for idx, change in st.session_state.get(key, {}).get("edited_rows", {}).items():
+            i = int(idx)
+            include = change.get("include", base_include[i])
+            override = change.get("buy_override", base_override[i])
+            override = None if override is None or pd.isna(override) else int(override)
+            changes.append((ids[i], include, override))
+        if changes:
+            planner.save_choices(conn(), changes)
+        st.session_state["plan_ver"] = st.session_state.get("plan_ver", 0) + 1
+
+    editor(rows[PLAN_COLUMNS], key=key, on_change=save, hide_index=True, width="stretch",
+           height=min(38 * (len(rows) + 1) + 4, 620),
+           disabled=[col for col in PLAN_COLUMNS if col not in ("include", "buy_override")],
+           column_config={
+               "rank": st.column_config.NumberColumn("#", format="%d"),
+               "include": st.column_config.CheckboxColumn("Include"),
+               "product_title": "Product", "size": "Size",
+               "product_sold_all_time": "Product sold (all time)", "sold_all_time": "Size sold (all time)",
+               "sold_last": "Sold last time", "on_hand": "In stock", "target": "Target stock",
+               "suggested": "Suggested buy",
+               "buy_override": st.column_config.NumberColumn("Your buy", min_value=0, step=1, format="%d"),
+               "final_buy": "Final buy", "final_cost": MONEY("Cost")})
+
+    final = plan_rows[plan_rows["final_buy"] > 0]
+    heading("Buy list")
+    if final.empty:
+        st.success("Nothing to buy with the current plan.")
+        return
+    buy = final[["product_title", "size", "sku", "on_hand", "suggested", "final_buy", "unit_cost", "final_cost"]]
+    st.caption(f"{int(final['final_buy'].sum())} units · {gbp(final['final_cost'].sum())}. "
+               "Only included sizes, using your overrides.")
+    table(buy, hide_index=True, width="stretch", column_config={
+        "product_title": "Product", "size": "Size", "sku": "SKU", "on_hand": "In stock",
+        "suggested": "Suggested buy", "final_buy": "Final buy", "unit_cost": MONEY("Unit cost"),
+        "final_cost": MONEY("Cost")})
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xl:
+        buy.to_excel(xl, sheet_name="Buy list", index=False)
+        plan_rows[PLAN_COLUMNS + ["sku", "unit_cost"]].to_excel(xl, sheet_name="Full plan by size", index=False)
+        products.to_excel(xl, sheet_name="By product", index=False)
+    st.download_button("Download buy list (Excel)", buf.getvalue(), file_name="popup_buy_list.xlsx")

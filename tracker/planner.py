@@ -43,6 +43,13 @@ def plan(conn, ledger, event_id, scale=1.0, buffer=0.5, min_per_size=1):
     v["product_sold_last"] = v["product_id"].map(sold_by_product).fillna(0).astype(int)
     v = costs.unit_costs_for_lines(conn, v.assign(date=pd.Timestamp.now().normalize()))
 
+    # Demand shown in all sales to date (online + in person), net of refunds - used to rank importance
+    all_sold = ledger.lines.groupby("variant_id")["quantity"].sum()
+    if not ledger.refund_lines.empty:
+        all_sold = all_sold.sub(ledger.refund_lines.groupby("variant_id")["quantity"].sum(), fill_value=0)
+    v["sold_all_time"] = v["variant_id"].map(all_sold).fillna(0).clip(lower=0).astype(int)
+    v["product_sold_all_time"] = v.groupby("product_id")["sold_all_time"].transform("sum")
+
     # overall size curve from the event (sized garments only)
     curve = sold[sold["size"] != "One size"].groupby("size")["quantity"].sum()
 
@@ -114,6 +121,44 @@ def plan(conn, ledger, event_id, scale=1.0, buffer=0.5, min_per_size=1):
                                                 "to_buy", "unit_cost", "buy_cost"]]
     buy_list = buy_list.sort_values(["product_title", "size"])
     return summary, products, in_plan, buy_list, not_sold
+
+
+def size_rank(size):
+    if size in events.SIZES:
+        return events.SIZES.index(size)
+    return 100 + (int(size) if str(size).isdigit() else 0)
+
+
+def restock_plan(conn, in_plan):
+    """Per-size restock rows ordered by demand, with saved include/override choices applied."""
+    rows = in_plan.copy()
+    rows = rows[(rows["target"] > 0) | (rows["on_hand"] > 0) | (rows["sold_all_time"] > 0)]
+    saved = db.read_df(conn, "SELECT variant_id, include, buy_override FROM planner_overrides")
+    rows = rows.merge(saved, on="variant_id", how="left")
+    rows["include"] = rows["include"].fillna(1).astype(bool)
+    rows["suggested"] = rows["to_buy"].astype(int)
+    rows["buy_override"] = pd.to_numeric(rows["buy_override"], errors="coerce")
+    rows["final_buy"] = rows["buy_override"].fillna(rows["suggested"]).where(rows["include"], 0).astype(int)
+    rows["final_cost"] = rows["final_buy"] * rows["unit_cost"]
+    rows["_size"] = rows["size"].map(size_rank)
+    rows = rows.sort_values(["product_sold_all_time", "product_title", "_size"], ascending=[False, True, True])
+    ranks = rows.drop_duplicates("product_id")[["product_id"]].reset_index(drop=True)
+    ranks["rank"] = ranks.index + 1
+    rows = rows.merge(ranks, on="product_id", how="left")
+    return rows.drop(columns="_size").reset_index(drop=True)
+
+
+def save_choices(conn, changes):
+    """changes: list of (variant_id, include, buy_override or None)."""
+    for variant_id, include, override in changes:
+        conn.execute("INSERT OR REPLACE INTO planner_overrides (variant_id, include, buy_override, updated_at) VALUES (?, ?, ?, ?)",
+                     (variant_id, int(bool(include)), None if override is None else int(override), db.now_iso()))
+    conn.commit()
+
+
+def reset_choices(conn):
+    conn.execute("DELETE FROM planner_overrides")
+    conn.commit()
 
 
 def size_grid(in_plan):

@@ -83,6 +83,9 @@ CREATE TABLE IF NOT EXISTS stock_writeoffs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, amount REAL NOT NULL, quantity INTEGER,
     product_id TEXT, product_title TEXT, reason TEXT, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS planner_overrides (
+    variant_id TEXT PRIMARY KEY, include INTEGER NOT NULL DEFAULT 1, buy_override INTEGER, updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );
