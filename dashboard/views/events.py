@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, ledger, metric, pct, style_fig, table
+from common import SERIES, conn, gbp, heading, ledger, metric, pct, style_fig, table
 from tracker import events
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -12,7 +12,7 @@ PCT = lambda label: st.column_config.NumberColumn(label, format="percent")  # no
 
 
 def render():
-    st.title("Events")
+    heading("Event report", "header")
     c = conn()
     evs = events.list_events(c)
     _new_event_form(c)
@@ -22,7 +22,8 @@ def render():
 
     labels = {int(r.id): f"{r.name} · {r.start_date}" + (f" to {r.end_date}" if r.end_date != r.start_date else "")
               for r in evs.itertuples()}
-    event_id = st.selectbox("Event", list(labels), format_func=labels.get, key="event_id")
+    event_id = st.selectbox("Event", list(labels), format_func=labels.get, key="event_id",
+                            help="Choose which pop-up or event to report on. Create new ones under ➕ New event.")
     L = ledger()
     R = events.EventReport(c, L, event_id)
     if R.orders.empty:
@@ -52,11 +53,11 @@ def render():
         st.caption(f"{k['missing_cost_units']} unit(s) have no unit cost (e.g. custom-amount sales), so they count as 100% margin.")
 
     with st.container(border=True):
-        st.markdown("**Key findings**")
+        heading("Key findings", "label")
         for f in R.findings():
             st.markdown(f"- {f}")
 
-    st.subheader("By day")
+    heading("By day", "subheader")
     days = R.by_day()
     table(days[["day", "orders", "units", "gross", "discounts", "net", "share", "aov", "first", "last",
                        "trading_hrs", "net_per_hr", "gross_profit"]], hide_index=True, width="stretch", column_config={
@@ -70,7 +71,7 @@ def render():
 
     left, right = st.columns(2)
     with left:
-        st.subheader("Sales by hour")
+        heading("Sales by hour", "subheader")
         hours = R.by_hour()
         main_days = [d for d in days.sort_values("first")["day"] if days.set_index("day").loc[d, "orders"] > 1][:4]
         fig = go.Figure()
@@ -81,7 +82,7 @@ def render():
         fig.update_layout(barmode="group")
         st.plotly_chart(fig, width="stretch")
     with right:
-        st.subheader("By category")
+        heading("By category", "subheader")
         cats = R.by("category").iloc[::-1]
         fig = go.Figure(go.Bar(x=cats["net"], y=cats["category"], orientation="h", marker_color=SERIES[0],
                                text=[f"{gbp(n)} · {u} unit{'s' if u != 1 else ''}" for n, u in zip(cats["net"], cats["units"])],
@@ -117,7 +118,7 @@ def render():
             fig.update_layout(title=dict(text="Size curve (sized garments)", font=dict(size=14)), hovermode="closest")
             st.plotly_chart(fig, width="stretch")
         with b:
-            st.markdown("**Units by style × size**")
+            heading("Units by style × size", "label")
             table(R.style_by_size(), width="stretch")
         st.caption("Numeric sizes are waist sizes (jeans). One-size items (caps, foulards) are excluded from the curve.")
     with tab_c:
@@ -127,18 +128,18 @@ def render():
     with tab_b:
         a, b = st.columns(2)
         with a:
-            st.markdown("**Basket size**")
+            heading("Basket size", "label")
             table(R.baskets(), hide_index=True, width="stretch", column_config={
                 "basket": "Basket", "orders": "Orders", "units": "Units", "net": MONEY("Net sales"),
                 "share_orders": PCT("% of orders"), "aov": MONEY("AOV")})
         with b:
-            st.markdown("**Full price vs discounted**")
+            heading("Full price vs discounted", "label")
             table(R.pricing(), hide_index=True, width="stretch", column_config={
                 "pricing": "Pricing", "orders": "Orders", "net": MONEY("Net sales"), "discounts": MONEY("Discounts"),
                 "aov": MONEY("AOV"), "share_orders": PCT("% of orders")})
 
     if not R.costs.empty:
-        st.subheader("Event costs")
+        heading("Event costs", "subheader")
         table(R.costs[["date", "counterparty", "category", "amount_base", "source"]], hide_index=True, width="stretch",
                      column_config={"date": st.column_config.DatetimeColumn("Date", format="D MMM YYYY"),
                                     "counterparty": "Payee", "category": "Category", "amount_base": MONEY("Amount"),
@@ -169,7 +170,7 @@ def _manage(c, L, R, event_id):
         start = pd.Timestamp(ev["start_date"]) - pd.Timedelta(days=14)
         end = pd.Timestamp(ev["end_date"]) + pd.Timedelta(days=14)
 
-        st.markdown("**Orders in this event**")
+        heading("Orders in this event", "label")
         o = L.orders[(L.orders["date"] >= start) & (L.orders["date"] <= end)].sort_values("date")
         label = {r.id: f"{r.name} · {r.date:%a %d %b %H:%M} · {gbp(r.total, 2)} · {r.source_name}" for r in o.itertuples()}
         current = [i for i in R.orders["id"] if i in label]

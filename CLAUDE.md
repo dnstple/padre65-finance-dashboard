@@ -12,8 +12,11 @@ and shows P&L, product contribution, expenses, cash and pop-up event reports in 
   - `categorise.py` – rule + override categorisation of Wise and manual transactions
   - `reports.py` – `Ledger`: P&L, product contribution, cash flow, payout reconciliation
   - `events.py` – pop-up/event tagging and the event report
+  - `planner.py` – pop-up stock planner (past event sales → per-size targets vs Shopify stock → buy list)
+  - stock write-offs live in the `stock_writeoffs` table and appear in the P&L as "Stock written off" (below CM3, no cash effect)
   - `db.py` – schema + connection; `pg.py` adapts SQLite-style SQL to Postgres
-- `dashboard/` – Streamlit app (`app.py` + one module per page in `views/`)
+- `dashboard/` – Streamlit app (`app.py` + one module per page in `views/`; `reports.py` hosts the Event report and Pop-up stock planner)
+- `dashboard/glossary.py` – every on-screen term's definition (hover / ? icons). Run the app with `GLOSSARY_AUDIT=<file>` to log any label without one.
 - `config/categories.csv`, `config/category_rules.csv` – starting categories/rules, seeded into the DB (new rows are added on connect; deleted ones are not re-added)
 - `sync.py` – command line (run `python sync.py help` for commands)
 - `.github/workflows/sync.yml` – daily sync into the hosted database
@@ -47,7 +50,7 @@ Without `DATABASE_URL` the app uses SQLite (`DB_PATH`). With `DATABASE_URL` set 
 - Keep SQL SQLite-style (`?` placeholders, `INSERT OR REPLACE`) — `tracker/pg.py` translates it for Postgres. New tables need an entry in `pg.PRIMARY_KEYS` (and `SERIAL_TABLES` if they use an autoincrement `id`).
 - Charts: Plotly with the fixed palette in `dashboard/common.py` (`SERIES`), one £ axis per chart, `style_fig()` for layout.
 - Money is GBP floats; display with `common.gbp()`.
-- Use `common.table()` / `common.editor()` / `common.metric()` instead of `st.dataframe` / `st.data_editor` / `st.metric` so terms get hover definitions. Add a plain-English definition to `dashboard/glossary.py` for any new column, tile or P&L line.
+- Use `common.heading()` for titles/sections, and `common.table()` / `common.editor()` / `common.metric()` instead of `st.dataframe` / `st.data_editor` / `st.metric` so terms get hover definitions. Add a plain-English definition to `dashboard/glossary.py` for any new column, tile or P&L line.
 - Test against demo data (`python sync.py demo`) before pointing at production.
 
 ## Safety

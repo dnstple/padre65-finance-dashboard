@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, editor, gbp, ledger, metric, pct, period_filter, style_fig, table
+from common import SERIES, conn, editor, gbp, heading, ledger, metric, pct, period_filter, style_fig, table
 from glossary import GLOSSARY
 from tracker import db
 
@@ -12,10 +12,11 @@ MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # n
 
 
 def render():
-    st.title("Products & contribution")
+    heading("Products & contribution", "title")
     start, end = period_filter()
     L = ledger()
-    by = st.segmented_control("Level", ["Product", "Variant"], default="Product", key="prod_level") or "Product"
+    by = st.segmented_control("Level", ["Product", "Variant"], default="Product", key="prod_level",
+                              help="Product = all sizes/colours of an item together. Variant = each size/colour separately.") or "Product"
     pc = L.product_contribution(start, end, by=by.lower())
     if pc.empty:
         st.info("No sales in this period.")
@@ -56,7 +57,7 @@ def render():
     fig.update_layout(barmode="stack", hovermode="y unified")
     fig.update_yaxes(tickprefix="", gridcolor="rgba(0,0,0,0)")
     fig.update_xaxes(tickprefix="£", tickformat=",.0f")
-    st.subheader("Revenue split: cost vs gross profit")
+    heading("Revenue split: cost vs gross profit", "subheader")
     st.plotly_chart(fig, width="stretch")
 
     st.divider()
@@ -64,7 +65,7 @@ def render():
 
 
 def _product_detail(L):
-    st.header("Product log")
+    heading("Product log", "header")
     c = conn()
     variants = db.read_df(c, "SELECT * FROM shopify_variants")
     if variants.empty:
@@ -74,7 +75,8 @@ def _product_detail(L):
     sold_ids = L.lines.groupby("product_id")["quantity"].sum()
     products["sold"] = products["product_id"].map(sold_ids).fillna(0)
     products = products.sort_values(["sold", "product_title"], ascending=[False, True])
-    choice = st.selectbox("Product", products["product_title"].tolist(), key="log_product")
+    choice = st.selectbox("Product", products["product_title"].tolist(), key="log_product",
+                          help="Pick a product to see its sales, stock and its log of restocks, cost changes and notes.")
     prod = products[products["product_title"] == choice].iloc[0]
     pid = prod["product_id"]
 
@@ -102,7 +104,7 @@ def _product_detail(L):
 
     with right:
         with st.form("log_entry", clear_on_submit=True):
-            st.markdown("**Add log entry**")
+            heading("Add log entry", "label")
             event = st.selectbox("Type", ["restock", "cost_change", "note"],
                                  format_func={"restock": "Restock", "cost_change": "Cost change", "note": "Note"}.get)
             d = st.date_input("Date", date.today())
@@ -121,7 +123,7 @@ def _product_detail(L):
                 st.rerun()
 
     log = db.read_df(c, "SELECT id, date, event, quantity, unit_cost, total_cost, supplier, notes FROM product_log WHERE product_id = ? ORDER BY date DESC", (pid,))
-    st.markdown("**History**")
+    heading("History", "label")
     if log.empty:
         st.caption("No entries yet. Log restocks, cost changes and notes here.")
     else:

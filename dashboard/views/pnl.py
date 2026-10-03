@@ -3,15 +3,16 @@ import io
 import pandas as pd
 import streamlit as st
 
-from common import category_notes, ledger, period_filter, report_table
+from common import category_notes, heading, ledger, period_filter, report_table
 
 FREQS = {"Monthly": "M", "Quarterly": "Q", "Yearly": "Y"}
 
 
 def render():
-    st.title("Profit & loss")
+    heading("Profit & loss", "title")
     start, end = period_filter()
-    freq = st.segmented_control("View", list(FREQS), default="Monthly", key="pnl_freq") or "Monthly"
+    freq = st.segmented_control("View", list(FREQS), default="Monthly", key="pnl_freq",
+                                help="Show one column per month, quarter or year.") or "Monthly"
     L = ledger()
     p = L.pnl(start, end, FREQS[freq])
     if p.empty:

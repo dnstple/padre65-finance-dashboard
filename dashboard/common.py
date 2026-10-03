@@ -90,7 +90,8 @@ def period_filter():
         "Year to date": (today.replace(month=1, day=1), today),
         "Custom": None,
     }
-    choice = st.sidebar.selectbox("Period", list(options), key="period")
+    choice = st.sidebar.selectbox("Period", list(options), key="period",
+                                  help="Date range used by the reports on this page. Sales count on the order date, costs on the payment date.")
     if choice == "Custom":
         rng = st.sidebar.date_input("Date range", (today.replace(day=1), today), key="custom_range")
         return (rng[0], rng[1]) if isinstance(rng, (list, tuple)) and len(rng) == 2 else (rng[0], rng[0])
@@ -148,6 +149,16 @@ def add_help(df, column_config=None):
             if tip:
                 cfg[col] = {**current, "help": tip}
     return cfg
+
+
+def heading(text, level="subheader", help=None, container=None):
+    """Title / header / subheader / bold label with a ? icon explaining the block (from the glossary)."""
+    from glossary import define
+    target = container or st
+    tip = help or define(text)
+    if level == "label":
+        return target.markdown(f"**{text}**", help=tip)
+    return getattr(target, level)(text, help=tip)
 
 
 def metric(container, label, *args, **kwargs):

@@ -3,15 +3,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from common import conn, editor, ledger, table
+from common import conn, editor, heading, ledger, table
 from tracker import categorise, config, costs, db
 
 
 def render():
-    st.title("Data & sync")
+    heading("Data & sync", "title")
     c = conn()
 
-    st.subheader("Sync")
+    heading("Sync", "subheader")
     a, b = st.columns(2)
     with a:
         st.markdown("**Shopify**: orders, refunds, products and payouts")
@@ -32,7 +32,7 @@ def render():
             _run("wise_csv", lambda log: wise.import_csv(c, _tmp(wise_csv), log=log))
 
     st.divider()
-    st.subheader("Product costs (master sheet)")
+    heading("Product costs (master sheet)", "subheader")
     L = ledger()
     missing = L.missing_cost_lines
     if len(missing):

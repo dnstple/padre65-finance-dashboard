@@ -2,12 +2,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, ledger, period_filter, style_fig, table
+from common import SERIES, conn, gbp, heading, ledger, period_filter, style_fig, table
 from tracker import db
 
 
 def render():
-    st.title("Cash & Wise")
+    heading("Cash & Wise", "title")
     start, end = period_filter()
     L = ledger()
     c = conn()
@@ -22,7 +22,7 @@ def render():
 
     hist = L.wise_balance_history()
     if not hist.empty:
-        st.subheader("Wise balance over time")
+        heading("Wise balance over time", "subheader")
         fig = go.Figure()
         for i, (cur, h) in enumerate(hist.groupby("currency")):
             fig.add_scatter(x=h["date"], y=h["running_balance"], name=cur, mode="lines", line=dict(color=SERIES[i % 8], width=2),
@@ -34,7 +34,7 @@ def render():
 
     cf = L.cash_flow(start, end)
     if not cf.empty:
-        st.subheader("Cash in and out by month")
+        heading("Cash in and out by month", "subheader")
         tx = L.cash
         if start:
             tx = tx[(tx["date"] >= pd.Timestamp(start)) & (tx["date"] < pd.Timestamp(end) + pd.Timedelta(days=1))]
@@ -55,7 +55,7 @@ def render():
                    "Manual entries are included, so this isn't only Wise.")
 
     st.divider()
-    st.subheader("Shopify payouts → Wise reconciliation")
+    heading("Shopify payouts → Wise reconciliation", "subheader")
     payouts, unmatched = L.payout_reconciliation()
     if payouts is None:
         st.info("Shopify Payments payout data isn't available yet. Add the `read_shopify_payments_payouts` scope "

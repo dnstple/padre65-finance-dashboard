@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, bar_line_chart, conn, gbp, ledger, metric, pct, period_filter, style_fig, table
+from common import SERIES, bar_line_chart, conn, gbp, heading, ledger, metric, pct, period_filter, style_fig, table
 
 
 def _row(p, label):
@@ -10,7 +10,7 @@ def _row(p, label):
 
 
 def render():
-    st.title("Overview")
+    heading("Overview", "title")
     start, end = period_filter()
     L = ledger()
     p = L.pnl(start, end)
@@ -49,12 +49,12 @@ def render():
 
     left, right = st.columns([3, 2])
     with left:
-        st.subheader("Revenue and profit by month")
+        heading("Revenue and profit by month", "subheader")
         st.plotly_chart(bar_line_chart(monthly, "month",
                                        [("Net revenue", "Net revenue"), ("Gross profit (CM1)", "Gross profit")],
                                        ("Net profit", "Net profit")), width="stretch")
     with right:
-        st.subheader("Where the money went")
+        heading("Where the money went", "subheader")
         cost_rows = p[(p["Total"] < 0) & ~p.index.isin(p.attrs.get("subtotals", []))
                       & ~p.index.isin(["Discounts", "Refunds", "VAT", "Shipping refunded", "Other refunds & adjustments"])]
         costs = (-cost_rows["Total"]).sort_values()
@@ -67,7 +67,7 @@ def render():
         fig.update_yaxes(tickprefix="", showgrid=False)
         st.plotly_chart(fig, width="stretch")
 
-    st.subheader("Top products")
+    heading("Top products", "subheader")
     pc = L.product_contribution(start, end).head(8)
     if not pc.empty:
         table(

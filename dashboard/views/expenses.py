@@ -4,12 +4,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import TYPE_COLORS, TYPE_LABELS, conn, editor, gbp, ledger, metric, period_filter, style_fig, table
+from common import TYPE_COLORS, TYPE_LABELS, conn, editor, gbp, heading, ledger, metric, period_filter, style_fig, table
 from tracker import categorise
 
 
 def render():
-    st.title("Expenses")
+    heading("Expenses", "title")
     start, end = period_filter()
     L = ledger()
     cash = L.cash
@@ -26,7 +26,7 @@ def render():
     for i, t in enumerate(["marketing", "fulfilment", "opex", "inventory"]):
         metric(k[i], TYPE_LABELS[t], gbp(spend.loc[spend["type"] == t, "cost"].sum()))
 
-    st.subheader("Spend by month")
+    heading("Spend by month", "subheader")
     show_stock = st.toggle("Include stock purchases", value=False,
                            help="Stock purchases are cash out, not P&L costs. Their cost reaches the P&L as COGS when items sell.")
     types = ["marketing", "fulfilment", "opex"] + (["inventory"] if show_stock else [])
@@ -43,13 +43,13 @@ def render():
 
     left, right = st.columns(2)
     with left:
-        st.subheader("By category")
+        heading("By category", "subheader")
         by_cat = (spend.groupby(["category", "type"])["cost"].sum().reset_index().sort_values("cost", ascending=False))
         by_cat["type"] = by_cat["type"].map(TYPE_LABELS)
         table(by_cat, hide_index=True, width="stretch", column_config={
             "category": "Category", "type": "Group", "cost": st.column_config.NumberColumn("Spend", format="£%.2f")})
     with right:
-        st.subheader("Top payees")
+        heading("Top payees", "subheader")
         payees = spend.groupby("counterparty")["cost"].agg(["sum", "count"]).sort_values("sum", ascending=False).head(15).reset_index()
         table(payees, hide_index=True, width="stretch", column_config={
             "counterparty": "Payee", "sum": st.column_config.NumberColumn("Spend", format="£%.2f"), "count": "Payments"})
@@ -59,7 +59,7 @@ def render():
 
 
 def _review(L):
-    st.header("Review & categorise transactions")
+    heading("Review & categorise transactions", "header")
     c = conn()
     cats = categorise.categories(c)["category"].tolist()
     f1, f2, f3 = st.columns([2, 2, 1])

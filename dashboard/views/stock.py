@@ -4,14 +4,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, editor, gbp, ledger, metric, style_fig, table
+from common import SERIES, conn, editor, gbp, heading, ledger, metric, style_fig, table
 from tracker import db
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
 
 
 def render():
-    st.title("Stock")
+    heading("Stock", "title")
     c = conn()
     L = ledger()
     k = L.stock_check()
@@ -47,7 +47,7 @@ def render():
     if k["uncosted_units"]:
         st.caption(f"{k['uncosted_units']} unit(s) in Shopify have no unit cost, so they're valued at £0 here.")
 
-    st.subheader("Record a write-off")
+    heading("Record a write-off", "subheader")
     st.markdown("Write off stock that can't be sold (damaged, faulty, samples, gifted). It becomes a cost in the P&L "
                 "on the date you choose. Cash isn't affected, because that money left when you paid the supplier.")
     with st.form("writeoff", clear_on_submit=True):
@@ -76,7 +76,7 @@ def render():
 
     wo = db.read_df(c, "SELECT id, date, amount, quantity, product_title, reason FROM stock_writeoffs ORDER BY date DESC")
     if not wo.empty:
-        st.markdown("**Write-offs**")
+        heading("Write-offs", "label")
         wo["date"] = pd.to_datetime(wo["date"]).dt.date
         edited = editor(wo, hide_index=True, width="stretch", num_rows="dynamic", key="wo_editor", column_config={
             "id": None, "date": st.column_config.DateColumn("Date", format="D MMM YYYY", required=True),
@@ -92,7 +92,7 @@ def render():
             c.commit()
             st.rerun()
 
-    st.subheader("Usable stock by product")
+    heading("Usable stock by product", "subheader")
     table(k["on_hand"][["product_title", "units", "unit_cost", "value", "retail"]], hide_index=True, width="stretch", column_config={
         "product_title": "Product", "units": "Units", "unit_cost": MONEY("Unit cost"),
         "value": MONEY("Stock value"), "retail": MONEY("Full-price value")})

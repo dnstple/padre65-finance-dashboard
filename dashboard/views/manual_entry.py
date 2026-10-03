@@ -3,12 +3,12 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from common import conn, editor, gbp
+from common import conn, editor, gbp, heading
 from tracker import categorise, config, db, manual
 
 
 def render():
-    st.title("Manual transactions")
+    heading("Manual transactions", "title")
     st.caption("Log anything that didn't go through Wise, such as personal cards, cash or another account. "
                "These feed straight into the P&L and expense reports.")
     c = conn()
@@ -68,7 +68,7 @@ def render():
             st.success("Saved")
             st.rerun()
 
-    st.subheader("Bulk import from CSV")
+    heading("Bulk import from CSV", "subheader")
     template = (config.ROOT / "templates" / "manual_transactions_template.csv").read_bytes()
     st.download_button("Download CSV template", template, file_name="manual_transactions_template.csv")
     st.caption("Columns: date, description, counterparty, amount, direction (out/in), category, payment_method, notes. "
