@@ -86,6 +86,9 @@ CREATE TABLE IF NOT EXISTS stock_writeoffs (
 CREATE TABLE IF NOT EXISTS planner_overrides (
     variant_id TEXT PRIMARY KEY, include INTEGER NOT NULL DEFAULT 1, buy_override INTEGER, updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS popup_costs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, item TEXT NOT NULL, category TEXT, amount REAL, notes TEXT, updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );

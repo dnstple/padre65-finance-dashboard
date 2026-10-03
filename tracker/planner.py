@@ -32,7 +32,9 @@ def plan(conn, ledger, event_id, scale=1.0, buffer=0.5, min_per_size=1):
     sold = report.lines[report.lines["variant_id"].notna()]
     sold_by_variant = sold.groupby("variant_id")["quantity"].sum()
     sold_by_product = sold.groupby("product_id")["quantity"].sum()
-    discount_rate = report.kpis()["discount_rate"]
+    last = report.kpis()
+    discount_rate = last["discount_rate"]
+    fee_rate = last["card_fees"] / last["net"] if last["net"] else 0.0
 
     v = db.read_df(conn, "SELECT * FROM shopify_variants")
     v = v[~v["product_title"].fillna("").str.strip().str.lower().isin(config.EXCLUDE_PRODUCTS)].copy()
@@ -113,7 +115,8 @@ def plan(conn, ledger, event_id, scale=1.0, buffer=0.5, min_per_size=1):
         "covered_units": int(in_plan["covered_units"].sum()), "to_buy_units": int(in_plan["to_buy"].sum()),
         "buy_cost": float(in_plan["buy_cost"].sum()),
         "uncosted_to_buy": int(in_plan.loc[in_plan["unit_cost"].isna(), "to_buy"].sum()),
-        "discount_rate": discount_rate, "last_units": int(sold["quantity"].sum()),
+        "discount_rate": discount_rate, "fee_rate": fee_rate, "last_units": int(sold["quantity"].sum()),
+        "last_event_costs": last["event_costs"],
         "last_orders": len(report.orders),
     }
     summary["readiness"] = summary["covered_units"] / summary["target_units"] if summary["target_units"] else 1.0
@@ -159,6 +162,55 @@ def save_choices(conn, changes):
 def reset_choices(conn):
     conn.execute("DELETE FROM planner_overrides")
     conn.commit()
+
+
+# --- pop-up running costs and expected profit ---------------------------------------
+
+COST_CATEGORIES = ["Venue / shop rent", "Fit-out & display", "Staff", "Travel & transport", "Marketing & promotion",
+                   "Packaging & bags", "Insurance & licences", "Equipment & POS", "Food & sundries", "Other"]
+DEFAULT_COSTS = [
+    ("Shop rent", "Venue / shop rent"), ("Rails, hangers, mirrors & signage", "Fit-out & display"),
+    ("Staff / helpers", "Staff"), ("Van hire, fuel & parking", "Travel & transport"),
+    ("Promotion (ads, flyers, influencers)", "Marketing & promotion"), ("Bags & tissue", "Packaging & bags"),
+    ("Event insurance", "Insurance & licences"), ("Drinks, food & sundries", "Food & sundries"),
+]
+
+
+def load_costs(conn):
+    """Saved pop-up cost lines, or a starter list at £0 if none have been saved yet."""
+    df = db.read_df(conn, "SELECT id, item, category, amount, notes FROM popup_costs ORDER BY id")
+    if df.empty:
+        df = pd.DataFrame({"id": [None] * len(DEFAULT_COSTS), "item": [i for i, _ in DEFAULT_COSTS],
+                           "category": [c for _, c in DEFAULT_COSTS], "amount": 0.0, "notes": ""})
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    return df
+
+
+def save_costs(conn, df):
+    """Replace the saved cost lines with the edited table."""
+    conn.execute("DELETE FROM popup_costs")
+    for r in df.to_dict("records"):
+        item = str(r.get("item") or "").strip()
+        if not item:
+            continue
+        amount = pd.to_numeric(r.get("amount"), errors="coerce")
+        conn.execute("INSERT INTO popup_costs (item, category, amount, notes, updated_at) VALUES (?, ?, ?, ?, ?)",
+                     (item, r.get("category") or "Other", 0.0 if pd.isna(amount) else float(amount),
+                      r.get("notes") or "", db.now_iso()))
+    conn.commit()
+
+
+def projection(summary, costs_df, sales_factor=1.0):
+    """Expected pop-up P&L: sales - stock cost of items sold - card fees - running costs."""
+    sales = summary["expected_sales"] * sales_factor
+    cogs = (summary["expected_sales"] - summary["expected_gross_profit"]) * sales_factor
+    fees = sales * summary["fee_rate"]
+    running = float(pd.to_numeric(costs_df["amount"], errors="coerce").fillna(0).sum())
+    profit = sales - cogs - fees - running
+    contribution_rate = (sales - cogs - fees) / sales if sales else 0
+    return {"sales": sales, "cogs": cogs, "gross_profit": sales - cogs, "fees": fees, "running": running,
+            "profit": profit, "margin": profit / sales if sales else None,
+            "break_even_sales": running / contribution_rate if contribution_rate > 0 else None}
 
 
 def size_grid(in_plan):

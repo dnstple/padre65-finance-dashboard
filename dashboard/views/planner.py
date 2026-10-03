@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, editor, gbp, heading, ledger, metric, pct, style_fig, table
+from common import SERIES, conn, editor, gbp, heading, ledger, metric, pct, report_table, style_fig, table
 from tracker import events, planner
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -87,6 +87,7 @@ def render():
             st.plotly_chart(fig, width="stretch")
 
     _plan_editor(c, plan_rows, products)
+    _costs_section(c, s, final_cost)
 
     if not not_sold.empty:
         heading("In stock but didn't sell last time")
@@ -183,3 +184,72 @@ def _plan_editor(c, plan_rows, products):
         plan_rows[PLAN_COLUMNS + ["sku", "unit_cost"]].to_excel(xl, sheet_name="Full plan by size", index=False)
         products.to_excel(xl, sheet_name="By product", index=False)
     st.download_button("Download buy list (Excel)", buf.getvalue(), file_name="popup_buy_list.xlsx")
+
+
+def _costs_section(c, s, restock_cost):
+    st.divider()
+    heading("Pop-up costs & expected profit", "header")
+    st.caption("Enter what running the shop will cost: rent, fit-out, staff, travel and so on. Add or delete rows as "
+               "needed. The expected profit below updates as you type. Click **Save costs** to keep them (shared with "
+               "everyone using the dashboard).")
+
+    saved = planner.load_costs(c)
+    edited = editor(saved[["item", "category", "amount", "notes"]], key=f"popup_costs_{st.session_state.get('costs_ver', 0)}",
+                    num_rows="dynamic", hide_index=True, width="stretch", column_config={
+                        "item": st.column_config.TextColumn("Cost item", required=True),
+                        "category": st.column_config.SelectboxColumn("Cost type", options=planner.COST_CATEGORIES,
+                                                                     default="Other"),
+                        "amount": st.column_config.NumberColumn("Expected cost", format="£%.2f", min_value=0, default=0.0),
+                        "notes": "Notes"})
+    unsaved = not edited.reset_index(drop=True).fillna("").astype(str).equals(
+        saved[["item", "category", "amount", "notes"]].reset_index(drop=True).fillna("").astype(str))
+    a, b = st.columns([1, 4])
+    if a.button("Save costs", type="primary", disabled=not unsaved):
+        planner.save_costs(c, edited)
+        st.session_state["costs_ver"] = st.session_state.get("costs_ver", 0) + 1
+        st.rerun()
+    if unsaved:
+        b.caption("⚠️ Unsaved changes. The figures below already include them.")
+
+    p = planner.projection(s, edited)
+    plain = dict(delta_color="off", delta_arrow="off", border=True)
+    row = st.columns(2)
+    n_lines = int((pd.to_numeric(edited["amount"], errors="coerce").fillna(0) > 0).sum())
+    metric(row[0], "Running costs", gbp(p["running"]), f"{n_lines} cost line{'s' if n_lines != 1 else ''}", **plain)
+    metric(row[1], "Expected pop-up profit", gbp(p["profit"]),
+           (pct(p["margin"]) + " of sales") if p["margin"] is not None else "", **plain)
+    row = st.columns(2)
+    metric(row[0], "Break-even sales", gbp(p["break_even_sales"]) if p["break_even_sales"] is not None else "–",
+           (f"{p['break_even_sales'] / p['sales']:.0%} of expected sales" if p["break_even_sales"] and p["sales"] else ""), **plain)
+    metric(row[1], "Cash needed up front", gbp(restock_cost + p["running"]),
+           f"{gbp(restock_cost)} stock + {gbp(p['running'])} costs", **plain)
+
+    left, right = st.columns([3, 2])
+    with left:
+        heading("Expected pop-up P&L")
+        lines = {"Expected pop-up sales": p["sales"], "Stock cost of items sold": -p["cogs"],
+                 "Gross profit": p["gross_profit"], f"Card fees ({s['fee_rate']:.1%})": -p["fees"]}
+        by_type = edited.assign(amount=pd.to_numeric(edited["amount"], errors="coerce").fillna(0))
+        by_type = by_type[by_type["amount"] > 0].groupby(by_type["category"].fillna("Other"))["amount"].sum()
+        for cat, amount in by_type.items():
+            lines[cat] = -amount
+        lines["Expected pop-up profit"] = p["profit"]
+        pnl = pd.DataFrame({"Expected": lines})
+        report_table(pnl, subtotals=["Gross profit", "Expected pop-up profit"],
+                     definitions={k: v for k, v in [(f"Card fees ({s['fee_rate']:.1%})",
+                                                     "Shopify card fees, at the same rate as the base pop-up.")]} |
+                                 {c_: "Your expected cost for this cost type, from the table above." for c_ in by_type.index})
+    with right:
+        heading("If sales come in higher or lower")
+        rows = []
+        for f in (0.5, 0.75, 1.0, 1.25, 1.5):
+            q = planner.projection(s, edited, f)
+            rows.append({"Sales vs expected": f"{f:.0%}", "Sales": q["sales"], "Profit": q["profit"]})
+        table(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
+            "Sales": st.column_config.NumberColumn("Sales", format="£%.0f"),
+            "Profit": st.column_config.NumberColumn("Profit", format="£%.0f")})
+        st.caption("Running costs stay the same whatever you sell; stock cost and card fees move with sales.")
+
+    st.caption("The restock spend isn't a cost of the pop-up itself. Only the stock you **sell** counts (stock cost of "
+               "items sold). Anything left over stays in stock for future sales. That's why cash needed up front can "
+               "be higher than the costs in the P&L.")
