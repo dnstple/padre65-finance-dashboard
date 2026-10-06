@@ -12,6 +12,7 @@ and shows P&L, product contribution, expenses, cash and pop-up event reports in 
   - `categorise.py` – rule + override categorisation of Wise and manual transactions
   - `reports.py` – `Ledger`: P&L, product contribution, cash flow, payout reconciliation
   - `events.py` – pop-up/event tagging and the event report
+  - `explorer.py` – Revenue page engine: facts (sold + refunded lines with every dimension, shared costs allocated monthly), any metric × dimension × time scale
   - `planner.py` – pop-up stock planner (past event sales → per-size targets vs Shopify stock → buy list)
   - stock write-offs live in the `stock_writeoffs` table and appear in the P&L as "Stock written off" (below CM3, no cash effect)
   - `db.py` – schema + connection; `pg.py` adapts SQLite-style SQL to Postgres
