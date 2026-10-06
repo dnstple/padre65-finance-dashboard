@@ -158,7 +158,12 @@ def series(conn, ledger, data, metric, dimension, timescale, start=None, end=Non
     if out.empty:
         return out.assign(value=[])
     # complete grid of periods so lines/rolling averages see zero days
-    full = pd.period_range(out["period"].min(), out["period"].max(), freq=freq).start_time
+    lo, hi = out["period"].min(), out["period"].max()
+    if start is not None:
+        lo = min(lo, pd.Timestamp(start).to_period(freq).start_time)
+    if end is not None:
+        hi = max(hi, pd.Timestamp(end).to_period(freq).start_time)
+    full = pd.period_range(lo, hi, freq=freq).start_time
     groups = out["group"].unique()
     grid = pd.MultiIndex.from_product([full, groups], names=["period", "group"])
     out = out.set_index(["period", "group"]).reindex(grid).fillna({"num": 0.0, "den": 0.0 if den else 1.0}).reset_index()

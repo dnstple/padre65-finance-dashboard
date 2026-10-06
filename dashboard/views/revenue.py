@@ -1,10 +1,11 @@
 import io
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, heading, ledger, metric, period_filter, style_fig
+from common import SERIES, conn, gbp, heading, ledger, metric, style_fig
 from tracker import explorer
 
 TOP_N = 8
@@ -28,12 +29,53 @@ def _period_label(ts, freq):
             "Q": f"Q{ts.quarter} {ts.year}", "Y": str(ts.year)}[freq]
 
 
+def _date_range(data):
+    """Start/end date pickers with quick presets. Used on this page instead of the sidebar Period filter."""
+    today = date.today()
+    first_sale = data.loc[data["kind"] == "sale", "date"].min()
+    first_sale = first_sale.date() if pd.notna(first_sale) else today
+    earliest = min(data["date"].min().date(), first_sale) if not data.empty else today
+    last_month_end = today.replace(day=1) - timedelta(days=1)
+    presets = {
+        "All time": (first_sale, today),
+        "Last 7 days": (today - timedelta(days=6), today),
+        "Last 30 days": (today - timedelta(days=29), today),
+        "Last 90 days": (today - timedelta(days=89), today),
+        "This month": (today.replace(day=1), today),
+        "Last month": (last_month_end.replace(day=1), last_month_end),
+        "Year to date": (today.replace(month=1, day=1), today),
+        "Custom": None,
+    }
+    st.session_state.setdefault("rev_start", first_sale)
+    st.session_state.setdefault("rev_end", today)
+
+    def apply_preset():
+        rng = presets.get(st.session_state["rev_preset"])
+        if rng:
+            st.session_state["rev_start"], st.session_state["rev_end"] = rng
+
+    def mark_custom():
+        st.session_state["rev_preset"] = "Custom"
+
+    a, b, d = st.columns(3)
+    a.selectbox("Quick range", list(presets), key="rev_preset", on_change=apply_preset,
+                help="Fills in the start and end dates for common ranges. Pick dates yourself to set a custom range.")
+    start = b.date_input("Start date", key="rev_start", min_value=earliest, max_value=today, format="DD/MM/YYYY",
+                         on_change=mark_custom, help="First day to include (UK time). Sales count on the order date, refunds on the refund date.")
+    end = d.date_input("End date", key="rev_end", min_value=earliest, max_value=today, format="DD/MM/YYYY",
+                       on_change=mark_custom, help="Last day to include (the whole day is counted).")
+    if start > end:
+        st.error("The start date is after the end date.")
+        st.stop()
+    return start, end
+
+
 def render():
     heading("Revenue", "title")
-    start, end = period_filter()
     c = conn()
     L = ledger()
     data = explorer.facts(c, L)
+    start, end = _date_range(data)
 
     a, b, d = st.columns(3)
     metric_name = a.selectbox("Metric", list(explorer.METRICS), key="rev_metric",
