@@ -9,56 +9,90 @@ from glossary import GLOSSARY
 from tracker import db
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
+LEVELS = ["Grouped", "Product", "Variant"]
+
+
+def _per_unit_chart(pc, by, name_cols):
+    """Each bar = average price actually paid per unit, split into what the unit cost and what you kept."""
+    d = pc[pc["avg_price_paid"].notna() & pc["unit_cost"].notna()].head(20).iloc[::-1]
+    if d.empty:
+        return
+    if by == "Variant":
+        labels = d["product_title"] + " · " + d["variant_title"].fillna("")
+    else:
+        labels = d[name_cols[0]]
+    heading("What each unit sells for, and what you keep")
+    fig = go.Figure()
+    fig.add_bar(y=labels, x=d["unit_cost"], name="Unit cost", orientation="h", marker_color=SERIES[1],
+                marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                hovertemplate="%{x:£,.2f}<extra>Unit cost</extra>")
+    fig.add_bar(y=labels, x=d["cm1_per_unit"], name="Gross profit per unit", orientation="h", marker_color=SERIES[0],
+                marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                text=[f"{gbp(v, 2)} · {p:.0%}" for v, p in zip(d["cm1_per_unit"], d["cm1_pct"].fillna(0))],
+                textposition="outside", cliponaxis=False,
+                hovertemplate="%{x:£,.2f}<extra>Gross profit per unit</extra>")
+    fig = style_fig(fig, height=max(280, 32 * len(d) + 80))
+    fig.update_layout(barmode="stack", hovermode="y unified", margin=dict(r=110))
+    fig.update_yaxes(tickprefix="", gridcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(tickprefix="£", tickformat=",.0f")
+    st.plotly_chart(fig, width="stretch")
+    st.caption("Bar length = average price actually paid per unit. Labels show gross profit per unit and as a % of the price.")
 
 
 def render():
     heading("Products & contribution", "title")
     start, end = period_filter()
     L = ledger()
-    by = st.segmented_control("Level", ["Product", "Variant"], default="Product", key="prod_level",
-                              help="Product = all sizes/colours of an item together. Variant = each size/colour separately.") or "Product"
-    pc = L.product_contribution(start, end, by=by.lower())
+    if st.session_state.get("prod_level") not in (None, *LEVELS):
+        st.session_state.pop("prod_level")
+    by = st.segmented_control("Level", LEVELS, default="Grouped", key="prod_level",
+                              help="Grouped = products that are the same thing commercially (same type, unit cost and "
+                                   "price) joined together, e.g. every Club Long Sleeve colour or the £50 caps. "
+                                   "Product = each Shopify product. Variant = each size.") or "Grouped"
+    pc = L.grouped_contribution(start, end) if by == "Grouped" else L.product_contribution(start, end, by=by.lower())
     if pc.empty:
         st.info("No sales in this period.")
         return
 
     missing = pc[pc["missing_cost"]]
     if len(missing):
-        noun = by.lower() + ("s have" if len(missing) != 1 else " has")
+        noun = {"Grouped": "group", "Product": "product", "Variant": "variant"}[by] + ("s have" if len(missing) != 1 else " has")
         st.warning(f"{len(missing)} {noun} no unit cost, so COGS is £0 and margin is overstated. "
                    "Add costs on **Data & sync**.")
 
-    name_cols = ["product_title"] if by == "Product" else ["product_title", "variant_title", "sku"]
-    contribution = pc[name_cols + ["units", "units_returned", "net_revenue", "unit_cost", "cogs", "cm1", "cm1_pct",
-                            "alloc_fulfilment_fees", "cm2", "cm2_pct", "alloc_marketing", "cm3", "cm3_pct", "missing_cost"]]
-    table(contribution, hide_index=True, width="stretch", column_config={
-        "product_title": "Product", "variant_title": "Variant", "sku": "SKU",
-        "units": "Units", "units_returned": "Returned",
-        "net_revenue": st.column_config.NumberColumn("Net revenue", format="£%.2f", help=GLOSSARY["Net revenue (product)"]), "unit_cost": MONEY("Unit cost"), "cogs": MONEY("COGS"),
-        "cm1": MONEY("Gross profit (CM1)"),
-        "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
-        "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"),
-        "alloc_marketing": MONEY("Marketing (alloc.)"), "cm3": MONEY("CM3"),
-        "cm2_pct": st.column_config.NumberColumn("CM2 %", format="percent"),
-        "cm3_pct": st.column_config.NumberColumn("CM3 %", format="percent"),
-        "missing_cost": st.column_config.CheckboxColumn("No cost"),
-    })
+    name_cols = {"Grouped": ["group", "products", "includes"], "Product": ["product_title"],
+                 "Variant": ["product_title", "variant_title", "sku"]}[by]
+    names = {"group": "Product group", "products": "Products", "includes": "Includes", "product_title": "Product",
+             "variant_title": "Variant", "sku": "SKU"}
+
+    heading("Margin per unit")
+    st.caption("What one unit sells for and earns. **At full price** uses today's price; **actual** uses what customers "
+               "really paid on average, after discounts and returns.")
+    table(pc[name_cols + ["net_units", "full_price", "unit_cost", "full_price_margin", "avg_price_paid", "cm1_per_unit",
+                          "cm1_pct", "cm2_per_unit", "cm3_per_unit", "missing_cost"]],
+          hide_index=True, width="stretch", column_config={
+              **names, "net_units": "Units sold (net)", "full_price": MONEY("Full price"), "unit_cost": MONEY("Unit cost"),
+              "full_price_margin": MONEY("Margin per unit at full price"), "avg_price_paid": MONEY("Avg price paid"),
+              "cm1_per_unit": MONEY("Gross profit per unit"), "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
+              "cm2_per_unit": MONEY("CM2 per unit"), "cm3_per_unit": MONEY("CM3 per unit"),
+              "missing_cost": st.column_config.CheckboxColumn("No cost")})
+
+    _per_unit_chart(pc, by, name_cols)
+
+    heading("Contribution totals")
+    table(pc[name_cols + ["units", "units_returned", "net_revenue", "cogs", "cm1", "cm1_pct", "alloc_fulfilment_fees",
+                          "cm2", "cm2_pct", "alloc_marketing", "cm3", "cm3_pct"]],
+          hide_index=True, width="stretch", column_config={
+              **names, "units": "Units", "units_returned": "Returned",
+              "net_revenue": st.column_config.NumberColumn("Net revenue", format="£%.2f", help=GLOSSARY["Net revenue (product)"]),
+              "cogs": MONEY("COGS"), "cm1": MONEY("Gross profit (CM1)"),
+              "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
+              "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"),
+              "alloc_marketing": MONEY("Marketing (alloc.)"), "cm3": MONEY("CM3"),
+              "cm2_pct": st.column_config.NumberColumn("CM2 %", format="percent"),
+              "cm3_pct": st.column_config.NumberColumn("CM3 %", format="percent")})
     st.caption("CM1 is exact. Fees, fulfilment and marketing are shared costs, so they're allocated to products "
                "by share of net revenue for the period.")
-
-    top = pc.head(15).iloc[::-1]
-    labels = top["product_title"] if by == "Product" else top["product_title"] + " · " + top["variant_title"].fillna("")
-    fig = go.Figure()
-    fig.add_bar(y=labels, x=top["cogs"], name="COGS", orientation="h", marker_color=SERIES[1],
-                hovertemplate="%{x:£,.0f}<extra>COGS</extra>")
-    fig.add_bar(y=labels, x=top["cm1"], name="Gross profit", orientation="h", marker_color=SERIES[0],
-                hovertemplate="%{x:£,.0f}<extra>Gross profit</extra>")
-    fig = style_fig(fig, height=max(280, 30 * len(top) + 80))
-    fig.update_layout(barmode="stack", hovermode="y unified")
-    fig.update_yaxes(tickprefix="", gridcolor="rgba(0,0,0,0)")
-    fig.update_xaxes(tickprefix="£", tickformat=",.0f")
-    heading("Revenue split: cost vs gross profit", "subheader")
-    st.plotly_chart(fig, width="stretch")
 
     st.divider()
     _product_detail(L)

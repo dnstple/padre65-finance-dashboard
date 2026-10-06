@@ -8,8 +8,6 @@ import streamlit as st
 from common import SERIES, conn, gbp, heading, ledger, metric, style_fig
 from tracker import explorer
 
-OTHER = "All others"
-OTHER_COLOUR = "rgba(128,128,128,0.55)"
 
 
 def _fmt(metric_name, v):
@@ -80,8 +78,11 @@ def render():
     metric_name = a.selectbox("Metric", list(explorer.METRICS), key="rev_metric",
                               help="What to measure. Ratios (%, average order value) are recalculated for each "
                                    "period and group, not averaged.")
+    if st.session_state.get("rev_dim") not in explorer.DIMENSIONS:  # e.g. the old "Style" option
+        st.session_state.pop("rev_dim", None)
     dimension = b.selectbox("Break down by", list(explorer.DIMENSIONS), key="rev_dim",
-                            help="Split the metric into groups, e.g. one line per product or per size. Total = the whole business.")
+                            help="Split the metric into groups. Product = a design with all its colourways together (e.g. both Famara Tees); "
+                                 "Colourway = each Shopify product; Variant = colourway + size. Total = the whole business.")
     timescale = d.selectbox("Time scale", list(explorer.TIMESCALES), index=4, key="rev_time",
                             help="How to group dates. Rolling averages smooth out daily spikes by averaging the last 7 or 30 days.")
     if metric_name in explorer.TOTAL_ONLY and dimension != "Total":
@@ -91,16 +92,12 @@ def render():
     num, den, additive = explorer.METRICS[metric_name]
     dim_col = explorer.DIMENSIONS[dimension]
 
-    e, h, f, g = st.columns([2, 1, 1, 1])
+    e, f, g = st.columns([2, 1, 1])
     only = []
     if dim_col:
         options = (data.groupby(dim_col)["net"].sum().sort_values(ascending=False).index.tolist())
         only = e.multiselect(f"Show only these ({dimension.lower()})", options, key=f"rev_only_{dim_col}",
                              help="Leave empty to include everything. Pick specific items to compare just those.")
-    top_n = h.selectbox("Groups in chart", [5, 8, 12, 16, 24, "All"], index=1, key="rev_topn", disabled=not dim_col,
-                        help="How many groups get their own line or bar. The rest are combined as 'All others'. "
-                             "Beyond 8, colours repeat with dashed/dotted lines (or hatched bars) so each stays distinguishable. "
-                             "The table below always lists every group.")
     style = f.segmented_control("Chart", ["Lines", "Stacked bars"] if additive else ["Lines"], default="Lines",
                                 key="rev_style", help="Stacked bars show how groups add up to the total. Only for amounts and counts, not ratios.") or "Lines"
     cumulative = g.toggle("Running total", value=False, key="rev_cum", disabled=not additive,
@@ -144,23 +141,14 @@ def render():
     # chart: top groups + 'All others'
     heading(f"{metric_name} over time" + (f" by {dimension.lower()}" if dim_col else ""),
             help="Each line (or bar segment) is one group. Hover to see every group's value for that period.")
-    n_show = len(ranked) if top_n == "All" else int(top_n)
-    top = list(ranked.index[:n_show])
+    top = list(ranked.index)  # every group gets its own line - nothing is lumped together
     chart = out.copy()
-    if dim_col and len(ranked) > n_show:
-        rest = chart[~chart["group"].isin(top)].groupby("period")[["num", "den"]].sum().reset_index()
-        rest["value"] = rest["num"] / rest["den"] if den else rest["num"]
-        if den:
-            rest.loc[rest["den"] == 0, "value"] = float("nan")
-        rest["group"] = OTHER
-        chart = pd.concat([chart[chart["group"].isin(top)], rest], ignore_index=True)
-        top = top + [OTHER]
     fig = go.Figure()
     money = metric_name in explorer.MONEY_METRICS
     for i, grp in enumerate(top):
         sub = chart[chart["group"] == grp].sort_values("period")
-        colour = OTHER_COLOUR if grp == OTHER else SERIES[i % len(SERIES)]
-        cycle = 0 if grp == OTHER else i // len(SERIES)  # 2nd/3rd set of 8 reuse colours with a different line/fill style
+        colour = SERIES[i % len(SERIES)]
+        cycle = i // len(SERIES)  # 2nd/3rd set of 8 reuse the colours with a dashed/dotted line or hatched bar
         hover = "%{y:£,.0f}" if money else ("%{y:.1%}" if metric_name in explorer.PERCENT_METRICS else "%{y:,.1f}")
         if style == "Stacked bars":
             fig.add_bar(x=sub["period"], y=sub["value"], name=str(grp), marker_color=colour,
