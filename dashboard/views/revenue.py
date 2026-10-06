@@ -8,7 +8,6 @@ import streamlit as st
 from common import SERIES, conn, gbp, heading, ledger, metric, style_fig
 from tracker import explorer
 
-TOP_N = 8
 OTHER = "All others"
 OTHER_COLOUR = "rgba(128,128,128,0.55)"
 
@@ -92,12 +91,16 @@ def render():
     num, den, additive = explorer.METRICS[metric_name]
     dim_col = explorer.DIMENSIONS[dimension]
 
-    e, f, g = st.columns([2, 1, 1])
+    e, h, f, g = st.columns([2, 1, 1, 1])
     only = []
     if dim_col:
         options = (data.groupby(dim_col)["net"].sum().sort_values(ascending=False).index.tolist())
         only = e.multiselect(f"Show only these ({dimension.lower()})", options, key=f"rev_only_{dim_col}",
-                             help="Leave empty to include everything. The chart shows the top 8 and groups the rest as 'All others'.")
+                             help="Leave empty to include everything. Pick specific items to compare just those.")
+    top_n = h.selectbox("Groups in chart", [5, 8, 12, 16, 24, "All"], index=1, key="rev_topn", disabled=not dim_col,
+                        help="How many groups get their own line or bar. The rest are combined as 'All others'. "
+                             "Beyond 8, colours repeat with dashed/dotted lines (or hatched bars) so each stays distinguishable. "
+                             "The table below always lists every group.")
     style = f.segmented_control("Chart", ["Lines", "Stacked bars"] if additive else ["Lines"], default="Lines",
                                 key="rev_style", help="Stacked bars show how groups add up to the total. Only for amounts and counts, not ratios.") or "Lines"
     cumulative = g.toggle("Running total", value=False, key="rev_cum", disabled=not additive,
@@ -113,6 +116,7 @@ def render():
                                                       {"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}[freq],
                                                       start, end, only), metric_name)
     ranked = totals.reindex(totals.abs().sort_values(ascending=False).index)
+    ranked = ranked[ranked.fillna(0).abs() > 0.005] if len(ranked) > 1 else ranked  # no empty groups in the chart
 
     # headline tiles
     overall = explorer.series(c, L, data, metric_name, "Total",
@@ -140,9 +144,10 @@ def render():
     # chart: top groups + 'All others'
     heading(f"{metric_name} over time" + (f" by {dimension.lower()}" if dim_col else ""),
             help="Each line (or bar segment) is one group. Hover to see every group's value for that period.")
-    top = list(ranked.index[:TOP_N])
+    n_show = len(ranked) if top_n == "All" else int(top_n)
+    top = list(ranked.index[:n_show])
     chart = out.copy()
-    if dim_col and len(ranked) > TOP_N:
+    if dim_col and len(ranked) > n_show:
         rest = chart[~chart["group"].isin(top)].groupby("period")[["num", "den"]].sum().reset_index()
         rest["value"] = rest["num"] / rest["den"] if den else rest["num"]
         if den:
@@ -155,14 +160,17 @@ def render():
     for i, grp in enumerate(top):
         sub = chart[chart["group"] == grp].sort_values("period")
         colour = OTHER_COLOUR if grp == OTHER else SERIES[i % len(SERIES)]
+        cycle = 0 if grp == OTHER else i // len(SERIES)  # 2nd/3rd set of 8 reuse colours with a different line/fill style
         hover = "%{y:£,.0f}" if money else ("%{y:.1%}" if metric_name in explorer.PERCENT_METRICS else "%{y:,.1f}")
         if style == "Stacked bars":
             fig.add_bar(x=sub["period"], y=sub["value"], name=str(grp), marker_color=colour,
                         marker_line_color="rgba(255,255,255,1)", marker_line_width=1,
+                        marker_pattern_shape=["", "/", "."][cycle % 3],
                         hovertemplate=hover + f"<extra>{grp}</extra>")
         else:
             fig.add_scatter(x=sub["period"], y=sub["value"], name=str(grp), mode="lines+markers" if len(sub) <= 40 else "lines",
-                            line=dict(color=colour, width=2), marker=dict(size=7),
+                            line=dict(color=colour, width=2, dash=["solid", "dash", "dot"][cycle % 3]),
+                            marker=dict(size=7, symbol=["circle", "square", "diamond"][cycle % 3]),
                             connectgaps=False, hovertemplate=hover + f"<extra>{grp}</extra>")
     fig = style_fig(fig, height=420, money=money)
     if style == "Stacked bars":
@@ -196,7 +204,8 @@ def render():
     else:
         fmt = "%.1f" if window else "%d"
     st.dataframe(pivot, width="stretch",
-                 column_config={col: st.column_config.NumberColumn(col, format=fmt) for col in pivot.columns})
+                 column_config={"_index": st.column_config.Column(dimension if dim_col else "", width="large"),
+                                **{col: st.column_config.NumberColumn(col, format=fmt) for col in pivot.columns}})
 
     long = out[["period", "group", "value"]].rename(columns={"group": dimension, "value": metric_name})
     buf = io.BytesIO()

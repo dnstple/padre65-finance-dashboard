@@ -36,26 +36,27 @@ def main(argv):
         return
 
     conn = db.connect()
+    failed = []
+
+    def step(name, fn):
+        # Each source is independent: one failing (bad token, network) mustn't stop the others
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001 - log any failure and carry on
+            db.log_sync(conn, name, "error", f"{type(e).__name__}: {e}")
+            print(f"{name} sync failed: {type(e).__name__}: {e}")
+            failed.append(name)
+
     if cmd in ("all", "shopify"):
         from tracker import shopify
-        try:
-            shopify.sync(conn, full="--full" in args)
-        except shopify.ShopifyError as e:
-            db.log_sync(conn, "shopify", "error", str(e))
-            print(f"Shopify sync failed: {e}")
+        step("shopify", lambda: shopify.sync(conn, full="--full" in args))
     if cmd in ("all", "wise"):
         from tracker import wise
-        try:
-            wise.sync(conn)
-        except wise.WiseError as e:
-            db.log_sync(conn, "wise", "error", str(e))
-            print(f"Wise sync failed: {e}")
+        step("wise", lambda: wise.sync(conn))
     if cmd in ("all", "costs"):
-        try:
-            costs.sync_sheet(conn)
-        except Exception as e:
-            db.log_sync(conn, "costs_sheet", "error", str(e))
-            print(f"Cost sheet import failed: {e}")
+        step("costs_sheet", lambda: costs.sync_sheet(conn))
+    if failed and cmd in ("all", "shopify", "wise", "costs"):
+        sys.exit(f"Failed: {', '.join(failed)}")  # non-zero exit so a scheduled run shows as failed
     if cmd == "wise-csv":
         from tracker import wise
         for path in args:

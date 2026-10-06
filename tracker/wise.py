@@ -30,7 +30,11 @@ class WiseClient:
         from cryptography.hazmat.primitives.asymmetric import padding
 
         if self._key is None and config.WISE_PRIVATE_KEY:
-            self._key = serialization.load_pem_private_key(config.WISE_PRIVATE_KEY.encode(), password=None)
+            try:
+                self._key = serialization.load_pem_private_key(config.WISE_PRIVATE_KEY.encode(), password=None)
+            except ValueError as e:
+                # A damaged key shouldn't stop the sync - fall back to the Activities feed instead
+                raise StatementsBlocked(f"WISE_PRIVATE_KEY couldn't be read ({e})") from e
         if self._key is None:
             if not config.WISE_PRIVATE_KEY_PATH.exists():
                 raise WiseError(
