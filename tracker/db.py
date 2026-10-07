@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS manufacturer_proposals (
     sample_cost REAL, freight_per_unit REAL, duty_pct REAL, lead_time_weeks REAL, retail_price REAL,
     quality INTEGER, status TEXT, notes TEXT, updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS product_ideas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, product_type TEXT, price REAL, unit_cost REAL,
+    cost_source TEXT, first_order_units INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );
