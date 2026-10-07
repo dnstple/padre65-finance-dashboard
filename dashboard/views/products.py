@@ -1,148 +1,129 @@
-from datetime import date
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, editor, gbp, heading, ledger, metric, pct, period_filter, style_fig, table
+from common import SERIES, gbp, heading, ledger, period_filter, style_fig, table
 from glossary import GLOSSARY
-from tracker import db
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
+PCT = lambda label: st.column_config.NumberColumn(label, format="percent")  # noqa: E731
+LEVELS = ["Grouped", "Product", "Variant"]
+SPLIT_VIEWS = ["£ total", "£ per unit", "% of revenue"]
+# where each pound of revenue goes, in stacking order (colour follows the part, not its size)
+PARTS = [
+    ("cogs", "Product cost", SERIES[1]),
+    ("fees", "Fees & fulfilment", SERIES[3]),
+    ("marketing", "Marketing", SERIES[2]),
+    ("cm3", "Profit after marketing (CM3)", SERIES[0]),
+]
 
 
 def render():
     heading("Products & contribution", "title")
     start, end = period_filter()
     L = ledger()
-    by = st.segmented_control("Level", ["Product", "Variant"], default="Product", key="prod_level",
-                              help="Product = all sizes/colours of an item together. Variant = each size/colour separately.") or "Product"
-    pc = L.product_contribution(start, end, by=by.lower())
-    if pc.empty:
+    groups = L.grouped_contribution(start, end)
+    if groups.empty:
         st.info("No sales in this period.")
         return
+    if groups["missing_cost"].any():
+        names = ", ".join(groups.loc[groups["missing_cost"], "group"])
+        st.warning(f"No unit cost for: {names}. Their COGS is £0, so margins are overstated. Add costs on **Data & sync**.")
 
-    missing = pc[pc["missing_cost"]]
-    if len(missing):
-        noun = by.lower() + ("s have" if len(missing) != 1 else " has")
-        st.warning(f"{len(missing)} {noun} no unit cost, so COGS is £0 and margin is overstated. "
-                   "Add costs on **Data & sync**.")
+    _summary(groups)
+    st.divider()
+    _detail(L, start, end)
+    st.divider()
+    _revenue_split(groups)
 
-    name_cols = ["product_title"] if by == "Product" else ["product_title", "variant_title", "sku"]
-    contribution = pc[name_cols + ["units", "units_returned", "net_revenue", "unit_cost", "cogs", "cm1", "cm1_pct",
-                            "alloc_fulfilment_fees", "cm2", "cm2_pct", "alloc_marketing", "cm3", "cm3_pct", "missing_cost"]]
-    table(contribution, hide_index=True, width="stretch", column_config={
-        "product_title": "Product", "variant_title": "Variant", "sku": "SKU",
-        "units": "Units", "units_returned": "Returned",
-        "net_revenue": st.column_config.NumberColumn("Net revenue", format="£%.2f", help=GLOSSARY["Net revenue (product)"]), "unit_cost": MONEY("Unit cost"), "cogs": MONEY("COGS"),
-        "cm1": MONEY("Gross profit (CM1)"),
-        "cm1_pct": st.column_config.NumberColumn("CM1 %", format="percent"),
-        "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"),
-        "alloc_marketing": MONEY("Marketing (alloc.)"), "cm3": MONEY("CM3"),
-        "cm2_pct": st.column_config.NumberColumn("CM2 %", format="percent"),
-        "cm3_pct": st.column_config.NumberColumn("CM3 %", format="percent"),
-        "missing_cost": st.column_config.CheckboxColumn("No cost"),
-    })
+
+def _summary(groups):
+    heading("By product type")
+    st.caption("Products that are the same thing (same type, unit cost and price) are joined, e.g. all Club Long "
+               "Sleeve colours, or the £50 caps that cost the same to make. Sorted by revenue.")
+    g = groups.copy()
+    total = {
+        "group": "All products", "net_units": int(g["net_units"].sum()), "net_revenue": g["net_revenue"].sum(),
+        "unit_cost": None, "avg_price_paid": g["net_revenue"].sum() / max(g["net_units"].sum(), 1),
+        "cm1_per_unit": g["cm1"].sum() / max(g["net_units"].sum(), 1),
+        "cm1_pct": g["cm1"].sum() / g["net_revenue"].sum() if g["net_revenue"].sum() else None,
+        "cm2_pct": g["cm2"].sum() / g["net_revenue"].sum() if g["net_revenue"].sum() else None,
+        "cm3_pct": g["cm3"].sum() / g["net_revenue"].sum() if g["net_revenue"].sum() else None,
+    }
+    cols = ["group", "net_units", "net_revenue", "unit_cost", "avg_price_paid", "cm1_per_unit", "cm1_pct", "cm2_pct", "cm3_pct"]
+    shown = pd.concat([g[cols], pd.DataFrame([total])], ignore_index=True)
+    small = lambda col: {**col, "width": "small"}  # noqa: E731
+    table(shown, hide_index=True, width="stretch", height=35 * (len(shown) + 1) + 3, column_config={
+        "group": st.column_config.Column("Product group", width="medium"),
+        "net_units": st.column_config.NumberColumn("Units sold (net)", format="%d"),
+        "net_revenue": small(st.column_config.NumberColumn("Net revenue", format="£%.0f", help=GLOSSARY["Net revenue (product)"])),
+        "unit_cost": small(MONEY("Unit cost")), "avg_price_paid": MONEY("Avg price paid"),
+        "cm1_per_unit": MONEY("Gross profit per unit"), "cm1_pct": small(PCT("CM1 %")),
+        "cm2_pct": small(PCT("CM2 %")), "cm3_pct": small(PCT("CM3 %"))})
+
+
+def _detail(L, start, end):
+    heading("Detailed breakdown")
+    if st.session_state.get("prod_level") not in (None, *LEVELS):
+        st.session_state.pop("prod_level")
+    by = st.segmented_control("Level", LEVELS, default="Grouped", key="prod_level",
+                              help="Grouped = products that are the same thing commercially (same type, unit cost and "
+                                   "price) joined together. Product = each Shopify product. Variant = each size.") or "Grouped"
+    pc = L.grouped_contribution(start, end) if by == "Grouped" else L.product_contribution(start, end, by=by.lower())
+    if pc.empty:
+        return
+    name_cols = {"Grouped": ["group", "includes"], "Product": ["product_title"],
+                 "Variant": ["product_title", "variant_title", "sku"]}[by]
+    cols = name_cols + ["net_units", "units_returned", "full_price", "avg_price_paid", "unit_cost", "full_price_margin",
+                        "cm1_per_unit", "net_revenue", "cogs", "cm1", "cm1_pct", "alloc_fulfilment_fees", "cm2", "cm2_pct",
+                        "alloc_marketing", "cm3", "cm3_pct", "cm3_per_unit", "missing_cost"]
+    table(pc[cols], hide_index=True, width="stretch", column_config={
+        "group": "Product group", "includes": "Includes", "product_title": "Product", "variant_title": "Variant",
+        "sku": "SKU", "net_units": "Units sold (net)", "units_returned": "Returned",
+        "full_price": MONEY("Full price"), "avg_price_paid": MONEY("Avg price paid"), "unit_cost": MONEY("Unit cost"),
+        "full_price_margin": MONEY("Margin per unit at full price"), "cm1_per_unit": MONEY("Gross profit per unit"),
+        "net_revenue": st.column_config.NumberColumn("Net revenue", format="£%.2f", help=GLOSSARY["Net revenue (product)"]),
+        "cogs": MONEY("COGS"), "cm1": MONEY("Gross profit (CM1)"), "cm1_pct": PCT("CM1 %"),
+        "alloc_fulfilment_fees": MONEY("Fees & fulfilment (alloc.)"), "cm2": MONEY("CM2"), "cm2_pct": PCT("CM2 %"),
+        "alloc_marketing": MONEY("Marketing (alloc.)"), "cm3": MONEY("CM3"), "cm3_pct": PCT("CM3 %"),
+        "cm3_per_unit": MONEY("CM3 per unit"), "missing_cost": st.column_config.CheckboxColumn("No cost")})
     st.caption("CM1 is exact. Fees, fulfilment and marketing are shared costs, so they're allocated to products "
                "by share of net revenue for the period.")
 
-    top = pc.head(15).iloc[::-1]
-    labels = top["product_title"] if by == "Product" else top["product_title"] + " · " + top["variant_title"].fillna("")
+
+def _revenue_split(groups):
+    heading("Where the revenue goes")
+    view = st.segmented_control("Show as", SPLIT_VIEWS, default="£ total", key="split_view",
+                                help="£ total = the whole period. £ per unit = for one unit sold. "
+                                     "% of revenue = each part as a share of the group's revenue, so groups of "
+                                     "different sizes can be compared.") or "£ total"
+    d = groups[groups["net_units"] > 0].copy()
+    d["fees"] = -d["alloc_fulfilment_fees"]
+    d["marketing"] = -d["alloc_marketing"]
+    if view == "£ per unit":
+        for col, _, _ in PARTS:
+            d[col] = d[col] / d["net_units"]
+    elif view == "% of revenue":
+        for col, _, _ in PARTS:
+            d[col] = (d[col] / d["net_revenue"]).where(d["net_revenue"] != 0)
+    d = d.iloc[::-1]  # largest revenue at the top of the chart
+
+    is_pct = view == "% of revenue"
     fig = go.Figure()
-    fig.add_bar(y=labels, x=top["cogs"], name="COGS", orientation="h", marker_color=SERIES[1],
-                hovertemplate="%{x:£,.0f}<extra>COGS</extra>")
-    fig.add_bar(y=labels, x=top["cm1"], name="Gross profit", orientation="h", marker_color=SERIES[0],
-                hovertemplate="%{x:£,.0f}<extra>Gross profit</extra>")
-    fig = style_fig(fig, height=max(280, 30 * len(top) + 80))
-    fig.update_layout(barmode="stack", hovermode="y unified")
+    for col, label, colour in PARTS:
+        fmt = "{:.0%}" if is_pct else "£{:,.0f}" if view == "£ total" else "£{:,.2f}"
+        fig.add_bar(y=d["group"], x=d[col], name=label, orientation="h", marker_color=colour,
+                    marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                    customdata=[fmt.format(v) if pd.notna(v) else "–" for v in d[col]],
+                    hovertemplate="%{customdata}<extra>" + label + "</extra>")
+    fig = style_fig(fig, height=max(320, 34 * len(d) + 100), money=not is_pct)
+    fig.update_layout(barmode="relative", hovermode="y unified")
     fig.update_yaxes(tickprefix="", gridcolor="rgba(0,0,0,0)")
-    fig.update_xaxes(tickprefix="£", tickformat=",.0f")
-    heading("Revenue split: cost vs gross profit", "subheader")
-    st.plotly_chart(fig, width="stretch")
-
-    st.divider()
-    _product_detail(L)
-
-
-def _product_detail(L):
-    heading("Product log", "header")
-    c = conn()
-    variants = db.read_df(c, "SELECT * FROM shopify_variants")
-    if variants.empty:
-        st.info("Sync Shopify to see products.")
-        return
-    products = variants.groupby(["product_id", "product_title"], as_index=False).agg(stock=("inventory_quantity", "sum"))
-    sold_ids = L.lines.groupby("product_id")["quantity"].sum()
-    products["sold"] = products["product_id"].map(sold_ids).fillna(0)
-    products = products.sort_values(["sold", "product_title"], ascending=[False, True])
-    choice = st.selectbox("Product", products["product_title"].tolist(), key="log_product",
-                          help="Pick a product to see its sales, stock and its log of restocks, cost changes and notes.")
-    prod = products[products["product_title"] == choice].iloc[0]
-    pid = prod["product_id"]
-
-    lines = L.lines[L.lines["product_id"] == pid]
-    cost_row = c.execute("SELECT unit_cost, collection, notes FROM product_costs WHERE key = ?", (f"product:{pid}",)).fetchone()
-    k = st.columns(5)
-    metric(k[0], "Units sold (all time)", int(lines["quantity"].sum()))
-    metric(k[1], "Net revenue", gbp(lines["net"].sum()))
-    metric(k[2], "Current unit cost", gbp(cost_row["unit_cost"], 2) if cost_row else "Not set")
-    metric(k[3], "Gross margin", pct((lines["net"].sum() - lines["cogs"].sum()) / lines["net"].sum()) if lines["net"].sum() else "–")
-    metric(k[4], "In stock now", int(prod["stock"] or 0))
-
-    left, right = st.columns([3, 2])
-    with left:
-        if not lines.empty:
-            m = lines.assign(month=lines["date"].dt.to_period("M").astype(str)).groupby("month")["quantity"].sum().reset_index()
-            fig = go.Figure(go.Bar(x=m["month"], y=m["quantity"], marker_color=SERIES[0], name="Units",
-                                   hovertemplate="%{x}: %{y} units<extra></extra>"))
-            fig = style_fig(fig, height=260, money=False)
-            fig.update_layout(title=dict(text="Units sold by month", font=dict(size=14)))
-            st.plotly_chart(fig, width="stretch")
-        stock = variants[variants["product_id"] == pid][["variant_title", "sku", "price", "inventory_quantity"]]
-        table(stock, hide_index=True, width="stretch", column_config={
-            "variant_title": "Variant", "sku": "SKU", "price": MONEY("Price"), "inventory_quantity": "In stock"})
-
-    with right:
-        with st.form("log_entry", clear_on_submit=True):
-            heading("Add log entry", "label")
-            event = st.selectbox("Type", ["restock", "cost_change", "note"],
-                                 format_func={"restock": "Restock", "cost_change": "Cost change", "note": "Note"}.get)
-            d = st.date_input("Date", date.today())
-            qty = st.number_input("Quantity (restock)", min_value=0, step=1)
-            unit_cost = st.number_input("Unit cost £ (landed). Leave at 0 to keep the current cost", min_value=0.0, step=0.5, format="%.2f")
-            supplier = st.text_input("Supplier")
-            notes = st.text_area("Notes", height=80)
-            if st.form_submit_button("Save entry", type="primary"):
-                uc = unit_cost or None
-                c.execute("""INSERT INTO product_log (date, product_id, product_title, event, quantity, unit_cost,
-                             total_cost, supplier, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                          (d.isoformat(), pid, choice, event, qty or None, uc, (qty * uc) if (qty and uc) else None,
-                           supplier, notes, db.now_iso()))
-                c.commit()
-                st.success("Saved")
-                st.rerun()
-
-    log = db.read_df(c, "SELECT id, date, event, quantity, unit_cost, total_cost, supplier, notes FROM product_log WHERE product_id = ? ORDER BY date DESC", (pid,))
-    heading("History", "label")
-    if log.empty:
-        st.caption("No entries yet. Log restocks, cost changes and notes here.")
+    if is_pct:
+        fig.update_xaxes(tickprefix="", tickformat=".0%")
     else:
-        edited = editor(log, hide_index=True, width="stretch", num_rows="dynamic", key=f"log_{pid}",
-                                disabled=["id"], column_config={
-                                    "id": None, "event": st.column_config.SelectboxColumn("Type", options=["restock", "cost_change", "note"]),
-                                    "unit_cost": MONEY("Unit cost"), "total_cost": MONEY("Total cost")})
-        if st.button("Save changes to history"):
-            removed = set(log["id"]) - set(edited["id"].dropna())
-            for rid in removed:
-                c.execute("DELETE FROM product_log WHERE id = ?", (int(rid),))
-            for r in edited.dropna(subset=["id"]).to_dict("records"):
-                c.execute("""UPDATE product_log SET date=?, event=?, quantity=?, unit_cost=?, total_cost=?, supplier=?, notes=?
-                             WHERE id=?""", (str(r["date"])[:10], r["event"], _n(r["quantity"]), _n(r["unit_cost"]),
-                                             _n(r["total_cost"]), r["supplier"], r["notes"], int(r["id"])))
-            c.commit()
-            st.success("History updated")
-            st.rerun()
-
-
-def _n(v):
-    return None if v is None or pd.isna(v) else float(v)
+        fig.update_xaxes(tickprefix="£", tickformat=",.0f")
+    st.plotly_chart(fig, width="stretch")
+    st.caption("Each bar is a product group's net revenue split into product cost, its share of fees & fulfilment and "
+               "marketing, and the profit left after marketing (CM3). A CM3 segment to the left of zero means that "
+               "group lost money after its share of costs.")

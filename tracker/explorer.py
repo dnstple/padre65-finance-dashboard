@@ -10,9 +10,11 @@ from . import db, events
 
 CHANNELS = {"web": "Online", "pos": "In person", "quick_sale": "In person", "shopify_draft_order": "Draft / manual"}
 
+# "Product" groups colourways of the same design (e.g. both Famara Tees) - Shopify lists each colourway as its
+# own product. "Colourway" is the Shopify product; "Variant" adds the size.
 DIMENSIONS = {
-    "Total": None, "Product": "product_title", "Style": "style", "Category": "category", "Size": "size",
-    "Colour": "colour_family", "Variant": "variant_label", "Channel": "channel", "Event": "event",
+    "Total": None, "Product": "style", "Colourway": "product_title", "Variant": "variant_label", "Size": "size",
+    "Colour": "colour_family", "Category": "category", "Channel": "channel", "Event": "event",
     "Collection": "collection", "Full price vs discounted": "pricing",
 }
 

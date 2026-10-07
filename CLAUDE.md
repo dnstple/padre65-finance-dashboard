@@ -10,9 +10,11 @@ and shows P&L, product contribution, expenses, cash and pop-up event reports in 
   - `shopify.py`, `wise.py` – API syncs (Wise uses the Activities feed; statements need SCA signing, which falls back automatically)
   - `costs.py` – product unit costs from the Google Sheet (`COSTS_SHEET_URL`), matched to Shopify by handle then title
   - `categorise.py` – rule + override categorisation of Wise and manual transactions
-  - `reports.py` – `Ledger`: P&L, product contribution, cash flow, payout reconciliation
+  - `reports.py` – `Ledger`: P&L, product contribution (incl. `grouped_contribution`: products with the same type, unit cost and price joined, plus per-unit margins), cash flow, payout reconciliation
   - `events.py` – pop-up/event tagging and the event report
   - `explorer.py` – Revenue page engine: facts (sold + refunded lines with every dimension, shared costs allocated monthly), any metric × dimension × time scale
+  - `ideas.py` – Product log → new product ideas: current range (grouped, actual results or estimates) vs ideas on price and per-unit contribution
+  - `sourcing.py` – Manufacturers page: supplier quotes → landed cost, cost per unit at MOQ, margin and payback vs current costs
   - `planner.py` – pop-up stock planner (past event sales → per-size targets vs Shopify stock → buy list)
   - stock write-offs live in the `stock_writeoffs` table and appear in the P&L as "Stock written off" (below CM3, no cash effect)
   - `db.py` – schema + connection; `pg.py` adapts SQLite-style SQL to Postgres

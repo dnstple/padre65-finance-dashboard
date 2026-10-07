@@ -86,6 +86,38 @@ def _period(df, freq):
     return df["date"].dt.to_period(freq).astype(str)
 
 
+def _per_unit(g):
+    """Per-unit economics: what each unit actually sold for and earned, after discounts and returns."""
+    g = g.copy()
+    g["cm1_pct"] = (g["cm1"] / g["net_revenue"]).where(g["net_revenue"] != 0)
+    g["cm2_pct"] = (g["cm2"] / g["net_revenue"]).where(g["net_revenue"] != 0)
+    g["cm3_pct"] = (g["cm3"] / g["net_revenue"]).where(g["net_revenue"] != 0)
+    net_units = (g["units"] - g["units_returned"]).where(lambda u: u > 0)
+    g["net_units"] = net_units.fillna(0).astype(int)
+    g["avg_price_paid"] = g["net_revenue"] / net_units
+    g["cm1_per_unit"] = g["cm1"] / net_units
+    g["cm2_per_unit"] = g["cm2"] / net_units
+    g["cm3_per_unit"] = g["cm3"] / net_units
+    g["full_price_margin"] = g["full_price"] - g["unit_cost"]
+    return g
+
+
+def _group_name(styles, category, price):
+    """Readable name for a group of products: the design name if they're all one design, otherwise the words
+    they share (e.g. 'Patchwork Club Cap'), otherwise the type and price."""
+    if len(styles) == 1:
+        return styles[0]
+    words = [s.split() for s in styles]
+    common = []
+    for parts in zip(*[w[::-1] for w in words]):
+        if len({p.lower() for p in parts}) == 1:
+            common.insert(0, parts[0])
+        else:
+            break
+    base = " ".join(common) if common else f"{category} · £{price:,.0f}" if pd.notna(price) else category
+    return f"{base} ({len(styles)} designs)"
+
+
 class Ledger:
     """Everything the reports need, loaded once."""
 
@@ -245,10 +277,45 @@ class Ledger:
         g["cm2"] = g["cm1"] + g["alloc_fulfilment_fees"]
         g["alloc_marketing"] = marketing * share
         g["cm3"] = g["cm2"] + g["alloc_marketing"]
-        g["cm1_pct"] = (g["cm1"] / g["net_revenue"]).where(g["net_revenue"] != 0)
-        g["cm2_pct"] = (g["cm2"] / g["net_revenue"]).where(g["net_revenue"] != 0)
-        g["cm3_pct"] = (g["cm3"] / g["net_revenue"]).where(g["net_revenue"] != 0)
-        return g.reset_index().sort_values("net_revenue", ascending=False)
+        g = g.reset_index()
+        # current full (list) price, for the margin you'd make on an undiscounted sale
+        variants = db.read_df(self.conn, "SELECT variant_id, product_id, price FROM shopify_variants")
+        if by == "product":
+            g["full_price"] = g["product_id"].map(variants.groupby("product_id")["price"].max())
+        else:
+            g["full_price"] = g["variant_id"].map(variants.set_index("variant_id")["price"])
+        return _per_unit(g).sort_values("net_revenue", ascending=False)
+
+    def grouped_contribution(self, start=None, end=None):
+        """Products joined when they're the same thing commercially: same type, same unit cost and same full price
+        (e.g. every Club Long Sleeve colour, or the £50 caps that cost the same to make)."""
+        from . import events
+        pc = self.product_contribution(start, end, by="product")
+        if pc.empty:
+            return pc
+        pc["category"] = pc["product_title"].map(events.category_of)
+        pc["style"] = pc["product_title"].map(lambda t: events.split_title(t)[0])
+        pc["cost_key"] = pc["unit_cost"].round(2).astype(object).where(pc["unit_cost"].notna(), "no cost")
+        pc["price_key"] = pc["full_price"].round(2).astype(object).where(pc["full_price"].notna(), "no price")
+        sums = ["units", "units_returned", "gross", "discounts", "net_revenue", "cogs", "cm1",
+                "alloc_fulfilment_fees", "cm2", "alloc_marketing", "cm3"]
+        g = (pc.groupby(["category", "cost_key", "price_key"], dropna=False)
+             .agg(**{c: (c, "sum") for c in sums},
+                  unit_cost=("unit_cost", "max"), full_price=("full_price", "max"),
+                  missing_cost=("missing_cost", "any"), products=("product_title", "nunique"),
+                  includes=("product_title", lambda s: ", ".join(sorted(s))),
+                  styles=("style", lambda s: sorted(set(s))))
+             .reset_index())
+        g["group"] = [_group_name(styles, cat, price) for styles, cat, price in zip(g["styles"], g["category"], g["full_price"])]
+        # same design but a different cost (e.g. two colours made by different suppliers): say which is which
+        dupes = g["group"].duplicated(keep=False)
+        g.loc[dupes, "group"] = [f"{name} (cost £{cost:,.2f})" if pd.notna(cost) else f"{name} (no cost)"
+                                 for name, cost in zip(g.loc[dupes, "group"], g.loc[dupes, "unit_cost"])]
+        g = g[g["gross"] != 0]  # free items such as £0 postage add-ons
+        g = g.drop(columns=["styles", "cost_key", "price_key"])
+        for col, num in (("cm1_pct", "cm1"), ("cm2_pct", "cm2"), ("cm3_pct", "cm3")):
+            g[col] = (g[num] / g["net_revenue"]).where(g["net_revenue"] != 0)
+        return _per_unit(g).sort_values("net_revenue", ascending=False)
 
     def stock_check(self):
         """Stock bought vs sold vs written off vs what Shopify says is usable, all at cost."""

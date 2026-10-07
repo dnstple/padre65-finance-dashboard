@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS planner_overrides (
 CREATE TABLE IF NOT EXISTS popup_costs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, item TEXT NOT NULL, category TEXT, amount REAL, notes TEXT, updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS manufacturer_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, quote_date TEXT, manufacturer TEXT NOT NULL, country TEXT, contact TEXT,
+    product_type TEXT, product TEXT, currency TEXT DEFAULT 'GBP', unit_cost REAL, moq INTEGER, setup_cost REAL,
+    sample_cost REAL, freight_per_unit REAL, duty_pct REAL, lead_time_weeks REAL, retail_price REAL,
+    quality INTEGER, status TEXT, notes TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS product_ideas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, product_type TEXT, price REAL, unit_cost REAL,
+    cost_source TEXT, first_order_units INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );
