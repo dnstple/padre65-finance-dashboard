@@ -8,6 +8,7 @@ Inventory / Stock Purchase,inventory,"Paying suppliers for stock. Cash only - P&
 Freight & Duties (Stock),inventory,Inbound freight and import duty on stock - include in unit cost
 Branding & Design,opex,"Logo, brand identity and graphic design"
 Samples & Development,opex,"Samples, sampling, design development"
+Samples - Winter 26,opex,Sampling and development for the Winter 26 collection
 Photography & Content,opex,"Shoots, models, content creation"
 Shopify & Apps,opex,Shopify subscription and apps
 Software & Subscriptions,opex,Other software
@@ -17,6 +18,7 @@ Events & Pop-ups,opex,"Stalls, pop-ups, events"
 Travel,opex,Travel and subsistence
 Office & Sundries,opex,General costs
 Bank Fees,opex,Wise and other bank fees
+Insurance,opex,"Business insurance, e.g. Hiscox"
 Other Expense,opex,Anything else
 Other Sales (non-Shopify),other_income,"Sales taken outside Shopify, e.g. Stripe or PayPal"
 Other Income,other_income,"Interest, cashback and other non-sales income"
