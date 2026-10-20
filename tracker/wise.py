@@ -37,10 +37,8 @@ class WiseClient:
                 raise StatementsBlocked(f"WISE_PRIVATE_KEY couldn't be read ({e})") from e
         if self._key is None:
             if not config.WISE_PRIVATE_KEY_PATH.exists():
-                raise WiseError(
-                    f"Wise needs a signed SCA challenge but no private key was found at {config.WISE_PRIVATE_KEY_PATH}. "
-                    "Run `python sync.py wise-keys` and upload the public key to Wise (see README)."
-                )
+                # No signing key (e.g. on GitHub Actions): use the Activities feed, which doesn't need one
+                raise StatementsBlocked(f"no Wise signing key at {config.WISE_PRIVATE_KEY_PATH}")
             self._key = serialization.load_pem_private_key(config.WISE_PRIVATE_KEY_PATH.read_bytes(), password=None)
         sig = self._key.sign(one_time_token.encode(), padding.PKCS1v15(), hashes.SHA256())
         return base64.b64encode(sig).decode()
