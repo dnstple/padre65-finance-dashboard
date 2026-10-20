@@ -6,7 +6,7 @@ from common import require_password, sidebar_status  # noqa: E402
 
 require_password()
 
-from views import (cash, data, expenses, manual_entry, manufacturers, overview, pnl, product_log, products,  # noqa: E402
+from views import (cash, collection, data, expenses, manual_entry, manufacturers, overview, pnl, product_log, products,  # noqa: E402
                    reports, revenue, stock)  # noqa: E402
 
 pages = {
@@ -15,11 +15,14 @@ pages = {
         st.Page(revenue.render, title="Revenue", icon="📈", url_path="revenue"),
         st.Page(pnl.render, title="P&L", icon="🧾", url_path="pnl"),
         st.Page(products.render, title="Products & contribution", icon="👕", url_path="products"),
-        st.Page(product_log.render, title="Product log", icon="💡", url_path="product-log"),
         st.Page(expenses.render, title="Expenses", icon="💸", url_path="expenses"),
         st.Page(stock.render, title="Stock", icon="📦", url_path="stock"),
         st.Page(cash.render, title="Cash & Wise", icon="🏦", url_path="cash"),
         st.Page(reports.render, title="Reports", icon="📑", url_path="reports"),
+    ],
+    "Planning": [
+        st.Page(collection.render, title="Collection planner", icon="🧭", url_path="collection-planner"),
+        st.Page(product_log.render, title="Product log", icon="💡", url_path="product-log"),
         st.Page(manufacturers.render, title="Manufacturers", icon="🏭", url_path="manufacturers"),
     ],
     "Input": [
@@ -27,6 +30,6 @@ pages = {
         st.Page(data.render, title="Data & sync", icon="🔄", url_path="data"),
     ],
 }
-nav = st.navigation(pages)
+nav = st.navigation(pages, expanded=True)  # always list every page (no "View more")
 sidebar_status()
 nav.run()
