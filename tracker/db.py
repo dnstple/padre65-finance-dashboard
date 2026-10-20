@@ -99,6 +99,19 @@ CREATE TABLE IF NOT EXISTS product_ideas (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, product_type TEXT, price REAL, unit_cost REAL,
     cost_source TEXT, first_order_units INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS plan_collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, season TEXT, start_date TEXT, end_date TEXT,
+    planned_events INTEGER, notes TEXT, settings TEXT, overrides TEXT, created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS plan_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, collection_id INTEGER NOT NULL, name TEXT NOT NULL, product_type TEXT,
+    colour TEXT, sizes TEXT, unit_cost REAL, price REAL, comparable TEXT, manual_units REAL, emphasis REAL,
+    moq INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS plan_scenarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, collection_id INTEGER NOT NULL, name TEXT NOT NULL, settings TEXT,
+    overrides TEXT, notes TEXT, created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );
