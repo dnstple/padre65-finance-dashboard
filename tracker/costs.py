@@ -117,6 +117,7 @@ def download_sheet(url, dest=config.ROOT / "data" / "costs_sheet.xlsx"):
     resp = requests.get(f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=xlsx", timeout=60)
     if not resp.ok or "spreadsheetml" not in resp.headers.get("content-type", ""):
         raise ValueError("Couldn't download the cost sheet - check it's shared as 'Anyone with the link can view'")
+    dest.parent.mkdir(parents=True, exist_ok=True)  # data/ isn't in the repo, so it doesn't exist on GitHub Actions
     dest.write_bytes(resp.content)
     return dest
 
