@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, gbp, heading, ledger, metric, style_fig
+from common import BG, SERIES, conn, gbp, heading, ledger, metric, style_fig
 from tracker import explorer
 
 
@@ -152,7 +152,7 @@ def render():
         hover = "%{y:£,.0f}" if money else ("%{y:.1%}" if metric_name in explorer.PERCENT_METRICS else "%{y:,.1f}")
         if style == "Stacked bars":
             fig.add_bar(x=sub["period"], y=sub["value"], name=str(grp), marker_color=colour,
-                        marker_line_color="rgba(255,255,255,1)", marker_line_width=1,
+                        marker_line_color=BG, marker_line_width=1,
                         marker_pattern_shape=["", "/", "."][cycle % 3],
                         hovertemplate=hover + f"<extra>{grp}</extra>")
         else:

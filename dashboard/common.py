@@ -34,6 +34,7 @@ from tracker import config, db, reports  # noqa: E402
 # Categorical slots, fixed order (validated palette - see dataviz reference)
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
 GOOD, CRITICAL = "#0ca30c", "#d03b3b"
+BG = "#0f1216"  # page background (dark theme, .streamlit/config.toml) - used for gaps between chart segments
 TYPE_COLORS = {"marketing": SERIES[0], "fulfilment": SERIES[1], "opex": SERIES[2], "inventory": SERIES[3]}
 TYPE_LABELS = {"marketing": "Marketing", "fulfilment": "Fulfilment", "opex": "Overheads",
                "inventory": "Stock purchases", "other_income": "Other income", "excluded": "Excluded"}
@@ -60,12 +61,49 @@ def require_password():
     st.stop()
 
 
+class _TrackedConnection:
+    """The database connection, noting every write so cached reports reload after any change."""
+
+    _WRITES = ("INSERT", "UPDATE", "DELETE", "REPLACE")
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def _note(self, sql):
+        if sql.lstrip().upper().startswith(self._WRITES):
+            _data_state()["writes"] += 1
+
+    def execute(self, sql, params=()):
+        self._note(sql)
+        return self.inner.execute(sql, params)
+
+    def executemany(self, sql, seq):
+        self._note(sql)
+        return self.inner.executemany(sql, seq)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+@st.cache_resource
+def _data_state():
+    return {"writes": 0}  # shared by every session in this server process
+
+
 def conn():
-    return db.connect()
+    return _TrackedConnection(db.connect())
+
+
+@st.cache_resource(max_entries=2, show_spinner="Loading the numbers…")
+def _cached_ledger(version):
+    return reports.Ledger(conn())
 
 
 def ledger():
-    return reports.Ledger(conn())
+    """The Ledger, loaded once and reused until something is saved here or a sync runs (here or on GitHub)."""
+    c = conn()
+    last_sync = c.inner.execute("SELECT MAX(last_run) FROM sync_log").fetchone()[0]
+    return _cached_ledger((str(config.DATABASE_URL or config.DB_PATH), _data_state()["writes"], last_sync))
 
 
 def gbp(v, decimals=0):
@@ -119,7 +157,7 @@ def bar_line_chart(df, x, bars, line=None):
     if line:
         col, label = line
         fig.add_scatter(x=df[x], y=df[col], name=label, mode="lines+markers", line=dict(color=SERIES[len(bars)], width=2),
-                        marker=dict(size=8, line=dict(width=2, color="white")),
+                        marker=dict(size=8, line=dict(width=2, color=BG)),
                         hovertemplate="%{y:£,.0f}<extra>" + label + "</extra>")
     return style_fig(fig)
 

@@ -221,9 +221,10 @@ def unit_costs_for_lines(conn, lines):
         WHERE unit_cost IS NOT NULL AND event IN ('restock', 'cost_change') AND product_id IS NOT NULL
     """)
     if not log.empty and not lines.empty:
-        log["date"] = pd.to_datetime(log["date"])
+        # same datetime precision on both sides, or merge_asof refuses to match them
+        log["date"] = pd.to_datetime(log["date"]).astype("datetime64[ns]")
         left = lines.reset_index().rename(columns={"index": "_row"}).sort_values("date")
-        left["date"] = pd.to_datetime(left["date"])
+        left["date"] = pd.to_datetime(left["date"]).astype("datetime64[ns]")
         merged = pd.merge_asof(left, log.sort_values("date").rename(columns={"unit_cost": "log_cost"}),
                                on="date", by="product_id", direction="backward")
         log_cost = merged.set_index("_row")["log_cost"]

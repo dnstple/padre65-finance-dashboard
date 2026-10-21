@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, conn, editor, gbp, heading, ledger, metric, style_fig, table
+from common import BG, SERIES, conn, editor, gbp, heading, ledger, metric, pct, style_fig, table
 from tracker import db
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -12,6 +12,14 @@ MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # n
 
 def render():
     heading("Stock", "title")
+    tab_check, tab_history = st.tabs(["📦 Stock check", "🗂️ Restocks & cost changes"])
+    with tab_check:
+        _stock_check()
+    with tab_history:
+        _product_history()
+
+
+def _stock_check():
     c = conn()
     L = ledger()
     k = L.stock_check()
@@ -33,7 +41,7 @@ def render():
     for label, value, colour in parts:
         if value > 0.5:
             fig.add_bar(y=["Stock bought"], x=[value], name=label, orientation="h", marker_color=colour,
-                        marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                        marker_line_color=BG, marker_line_width=2,
                         text=[f"{label} {gbp(value)}"], textposition="inside", insidetextanchor="middle",
                         hovertemplate=f"{label}: %{{x:£,.0f}}<extra></extra>")
     fig = style_fig(fig, height=150)
@@ -96,3 +104,101 @@ def render():
     table(k["on_hand"][["product_title", "units", "unit_cost", "value", "retail"]], hide_index=True, width="stretch", column_config={
         "product_title": "Product", "units": "Units", "unit_cost": MONEY("Unit cost"),
         "value": MONEY("Stock value"), "retail": MONEY("Full-price value")})
+
+
+def _product_history():
+    L = ledger()
+    c = conn()
+    variants = db.read_df(c, "SELECT * FROM shopify_variants")
+    if variants.empty:
+        st.info("Sync Shopify to see products.")
+        return
+    st.caption("Sales, stock and the history of each product. Log restocks, cost changes and notes here. A restock "
+               "or cost change with a new unit cost updates COGS for sales from that date.")
+    products = variants.groupby(["product_id", "product_title"], as_index=False).agg(
+        stock=("inventory_quantity", "sum"), price=("price", "max"))
+    sold_ids = L.lines.groupby("product_id")["quantity"].sum()
+    products["sold"] = products["product_id"].map(sold_ids).fillna(0)
+    products = products.sort_values(["sold", "product_title"], ascending=[False, True])
+    choice = st.selectbox("Product", products["product_title"].tolist(), key="history_product",
+                          help="Pick a product to see its sales, stock and its log of restocks, cost changes and notes.")
+    prod = products[products["product_title"] == choice].iloc[0]
+    pid = prod["product_id"]
+
+    lines = L.lines[L.lines["product_id"] == pid]
+    cost_row = c.execute("SELECT unit_cost FROM product_costs WHERE key = ?", (f"product:{pid}",)).fetchone()
+    unit_cost = cost_row["unit_cost"] if cost_row else None
+    plain = dict(border=True)
+    k = st.columns(3)
+    metric(k[0], "Units sold (all time)", int(lines["quantity"].sum()), **plain)
+    metric(k[1], "Net revenue", gbp(lines["net"].sum()), **plain)
+    metric(k[2], "In stock now", int(prod["stock"] or 0), **plain)
+    k = st.columns(3)
+    metric(k[0], "Full price", gbp(prod["price"], 2), **plain)
+    metric(k[1], "Current unit cost", gbp(unit_cost, 2) if unit_cost is not None else "Not set", **plain)
+    metric(k[2], "Margin per unit at full price",
+           gbp(prod["price"] - unit_cost, 2) if unit_cost is not None else "–",
+           (pct((prod["price"] - unit_cost) / prod["price"]) + " of price") if unit_cost is not None and prod["price"] else "",
+           delta_color="off", delta_arrow="off", **plain)
+
+    left, right = st.columns([3, 2])
+    with left:
+        if not lines.empty:
+            m = lines.assign(month=lines["date"].dt.to_period("M").dt.start_time).groupby("month")["quantity"].sum().reset_index()
+            heading("Units sold by month")
+            fig = go.Figure(go.Bar(x=m["month"], y=m["quantity"], marker_color=SERIES[0], name="Units",
+                                   hovertemplate="%{x|%b %Y}: %{y} units<extra></extra>"))
+            fig = style_fig(fig, height=240, money=False)
+            fig.update_layout(hovermode="closest")
+            st.plotly_chart(fig, width="stretch")
+        heading("Stock by size")
+        stock = variants[variants["product_id"] == pid][["variant_title", "sku", "price", "inventory_quantity"]]
+        table(stock, hide_index=True, width="stretch", column_config={
+            "variant_title": "Variant", "sku": "SKU", "price": MONEY("Price"), "inventory_quantity": "In stock"})
+
+    with right:
+        with st.form("log_entry", clear_on_submit=True):
+            heading("Add log entry", "label")
+            event = st.selectbox("Type", ["restock", "cost_change", "note"],
+                                 format_func={"restock": "Restock", "cost_change": "Cost change", "note": "Note"}.get)
+            d = st.date_input("Date", date.today(), format="DD/MM/YYYY")
+            qty = st.number_input("Quantity (restock)", min_value=0, step=1)
+            new_cost = st.number_input("Unit cost £ (landed). Leave at 0 to keep the current cost", min_value=0.0,
+                                       step=0.5, format="%.2f")
+            supplier = st.text_input("Supplier")
+            notes = st.text_area("Notes", height=80)
+            if st.form_submit_button("Save entry", type="primary"):
+                uc = new_cost or None
+                c.execute("""INSERT INTO product_log (date, product_id, product_title, event, quantity, unit_cost,
+                             total_cost, supplier, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                          (d.isoformat(), pid, choice, event, qty or None, uc, (qty * uc) if (qty and uc) else None,
+                           supplier, notes, db.now_iso()))
+                c.commit()
+                st.success("Saved")
+                st.rerun()
+
+    log = db.read_df(c, "SELECT id, date, event, quantity, unit_cost, total_cost, supplier, notes FROM product_log "
+                        "WHERE product_id = ? ORDER BY date DESC", (pid,))
+    heading("History", "label")
+    if log.empty:
+        st.caption("No entries yet. Log restocks, cost changes and notes here.")
+        return
+    edited = editor(log, hide_index=True, width="stretch", num_rows="dynamic", key=f"log_{pid}", disabled=["id"],
+                    column_config={"id": None,
+                                   "event": st.column_config.SelectboxColumn("Type", options=["restock", "cost_change", "note"]),
+                                   "unit_cost": MONEY("Unit cost"), "total_cost": MONEY("Total cost")})
+    if st.button("Save changes to history"):
+        removed = set(log["id"]) - set(edited["id"].dropna())
+        for rid in removed:
+            c.execute("DELETE FROM product_log WHERE id = ?", (int(rid),))
+        for r in edited.dropna(subset=["id"]).to_dict("records"):
+            c.execute("""UPDATE product_log SET date=?, event=?, quantity=?, unit_cost=?, total_cost=?, supplier=?, notes=?
+                         WHERE id=?""", (str(r["date"])[:10], r["event"], _n(r["quantity"]), _n(r["unit_cost"]),
+                                         _n(r["total_cost"]), r["supplier"], r["notes"], int(r["id"])))
+        c.commit()
+        st.success("History updated")
+        st.rerun()
+
+
+def _n(v):
+    return None if v is None or pd.isna(v) else float(v)
