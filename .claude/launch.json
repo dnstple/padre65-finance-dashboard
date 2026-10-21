@@ -6,7 +6,7 @@
       "runtimeExecutable": "python",
       "runtimeArgs": [
         "-c",
-        "import os, runpy, sys; os.environ['DATABASE_URL'] = ' '; os.environ['DB_PATH'] = 'data/demo.db'; sys.argv = ['streamlit', 'run', 'dashboard/app.py', '--server.port', '8502', '--server.headless', 'true', '--secrets.files', 'data/demo-secrets.toml']; runpy.run_module('streamlit', run_name='__main__')"
+        "import os, runpy, sys; os.environ['DATABASE_URL'] = ' '; os.environ['DB_PATH'] = 'data/demo.db'; os.environ['GLOSSARY_AUDIT'] = 'data/glossary_gaps.txt'; sys.argv = ['streamlit', 'run', 'dashboard/app.py', '--server.port', '8502', '--server.headless', 'true', '--secrets.files', 'data/demo-secrets.toml']; runpy.run_module('streamlit', run_name='__main__')"
       ],
       "port": 8502
     },

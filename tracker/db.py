@@ -106,7 +106,8 @@ CREATE TABLE IF NOT EXISTS plan_collections (
 CREATE TABLE IF NOT EXISTS plan_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT, collection_id INTEGER NOT NULL, name TEXT NOT NULL, product_type TEXT,
     colour TEXT, sizes TEXT, unit_cost REAL, price REAL, comparable TEXT, manual_units REAL, emphasis REAL,
-    moq INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+    moq INTEGER, status TEXT, notes TEXT, created_at TEXT, updated_at TEXT, supplier TEXT, currency TEXT, tiers TEXT,
+    sample_cost REAL, custom_cost REAL, lead_weeks REAL, draft_units REAL
 );
 CREATE TABLE IF NOT EXISTS plan_scenarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT, collection_id INTEGER NOT NULL, name TEXT NOT NULL, settings TEXT,
@@ -149,13 +150,22 @@ def is_postgres(conn):
     return not isinstance(getattr(conn, "inner", conn), sqlite3.Connection)
 
 
+# Columns added after a table was first created: (table, column, type)
+ADDED_COLUMNS = [
+    ("shopify_variants", "handle", "TEXT"),
+    ("plan_items", "supplier", "TEXT"), ("plan_items", "currency", "TEXT"), ("plan_items", "tiers", "TEXT"),
+    ("plan_items", "sample_cost", "REAL"), ("plan_items", "custom_cost", "REAL"), ("plan_items", "lead_weeks", "REAL"),
+    ("plan_items", "draft_units", "REAL"),
+]
+
+
 def _migrate(conn):
-    if is_postgres(conn):
-        conn.execute("ALTER TABLE shopify_variants ADD COLUMN IF NOT EXISTS handle TEXT")
-        return
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(shopify_variants)")}
-    if "handle" not in cols:
-        conn.execute("ALTER TABLE shopify_variants ADD COLUMN handle TEXT")
+    for table, column, kind in ADDED_COLUMNS:
+        if is_postgres(conn):
+            kind = "DOUBLE PRECISION" if kind == "REAL" else kind
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {kind}")
+        elif column not in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
 
 def _seed(conn):
