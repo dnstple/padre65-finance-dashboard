@@ -14,12 +14,10 @@ and shows P&L, product contribution, expenses, cash and pop-up event reports in 
   - `events.py` – pop-up/event tagging and the event report
   - `explorer.py` – Revenue page engine: facts (sold + refunded lines with every dimension, shared costs allocated monthly), any metric × dimension × time scale
   - `collection.py` – Collection planner: demand evidence per variant (online rate while in stock, capped stock-out adjustment; per-event demand with sold-out uplift), comparables (product → design → type → range → own estimate), size mixes, plan by history × ambition / revenue target / stock budget, outcomes at expected demand with low/high bands, scenarios. Planning only - never touches orders or inventory.
-  - `ideas.py` – Product log → new product ideas: current range (grouped, actual results or estimates) vs ideas on price and per-unit contribution
-  - `sourcing.py` – Manufacturers page: supplier quotes → landed cost, cost per unit at MOQ, margin and payback vs current costs
   - `planner.py` – pop-up stock planner (past event sales → per-size targets vs Shopify stock → buy list)
   - stock write-offs live in the `stock_writeoffs` table and appear in the P&L as "Stock written off" (below CM3, no cash effect)
   - `db.py` – schema + connection; `pg.py` adapts SQLite-style SQL to Postgres
-- `dashboard/` – Streamlit app (`app.py` + one module per page in `views/`; sidebar groups Finance / Planning / Input; `reports.py` hosts the Event report and Pop-up stock planner)
+- `dashboard/` – Streamlit app (`app.py` + one module per page in `views/`; sidebar groups Finance / Planning / Input; the Stock page also holds the restock & cost-change log (`product_log`); `reports.py` hosts the Event report and Pop-up stock planner)
 - `dashboard/glossary.py` – every on-screen term's definition (hover / ? icons). Run the app with `GLOSSARY_AUDIT=<file>` to log any label without one.
 - `config/categories.csv`, `config/category_rules.csv` – starting categories/rules, seeded into the DB (new rows are added on connect; deleted ones are not re-added)
 - `sync.py` – command line (run `python sync.py help` for commands)

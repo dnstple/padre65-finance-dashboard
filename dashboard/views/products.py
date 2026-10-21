@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SERIES, gbp, heading, ledger, period_filter, style_fig, table
+from common import BG, SERIES, gbp, heading, ledger, period_filter, style_fig, table
 from glossary import GLOSSARY
 
 MONEY = lambda label: st.column_config.NumberColumn(label, format="£%.2f")  # noqa: E731
@@ -113,7 +113,7 @@ def _revenue_split(groups):
     for col, label, colour in PARTS:
         fmt = "{:.0%}" if is_pct else "£{:,.0f}" if view == "£ total" else "£{:,.2f}"
         fig.add_bar(y=d["group"], x=d[col], name=label, orientation="h", marker_color=colour,
-                    marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                    marker_line_color=BG, marker_line_width=2,
                     customdata=[fmt.format(v) if pd.notna(v) else "–" for v in d[col]],
                     hovertemplate="%{customdata}<extra>" + label + "</extra>")
     fig = style_fig(fig, height=max(320, 34 * len(d) + 100), money=not is_pct)

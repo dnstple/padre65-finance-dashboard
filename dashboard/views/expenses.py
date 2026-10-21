@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import TYPE_COLORS, TYPE_LABELS, conn, editor, gbp, heading, ledger, metric, period_filter, style_fig, table
+from common import BG, TYPE_COLORS, TYPE_LABELS, conn, editor, gbp, heading, ledger, metric, period_filter, style_fig, table
 from tracker import categorise
 
 
@@ -35,7 +35,7 @@ def render():
     for t in types:
         if t in monthly:
             fig.add_bar(x=monthly.index, y=monthly[t], name=TYPE_LABELS[t], marker_color=TYPE_COLORS[t],
-                        marker_line_color="rgba(255,255,255,1)", marker_line_width=2,
+                        marker_line_color=BG, marker_line_width=2,
                         hovertemplate="%{y:£,.0f}<extra>" + TYPE_LABELS[t] + "</extra>")
     fig = style_fig(fig)
     fig.update_layout(barmode="stack")

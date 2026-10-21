@@ -63,7 +63,7 @@ def render():
 
     current = db.read_df(c, "SELECT key, product_title, variant_title, collection, unit_cost, notes, updated_at FROM product_costs ORDER BY product_title")
     if not current.empty:
-        st.caption("Current unit costs. Edit here for quick fixes and log restock cost changes on the Products page.")
+        st.caption("Current unit costs. Edit here for quick fixes and log restock cost changes on the Stock page (Restocks & cost changes).")
         edited = editor(current, hide_index=True, width="stretch", key="cost_editor",
                                 disabled=["key", "product_title", "variant_title", "updated_at"],
                                 column_config={"key": None, "unit_cost": st.column_config.NumberColumn("Unit cost", format="£%.2f")})

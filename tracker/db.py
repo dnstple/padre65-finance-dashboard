@@ -134,7 +134,7 @@ def connect(path=None, url=None):
     else:
         path = path or config.DB_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(path)
+        conn = sqlite3.connect(path, check_same_thread=False)  # the dashboard caches reports across threads
         conn.row_factory = sqlite3.Row
         target = str(path)
     if target not in _initialised:  # schema + seeding once per process
@@ -146,7 +146,7 @@ def connect(path=None, url=None):
 
 
 def is_postgres(conn):
-    return not isinstance(conn, sqlite3.Connection)
+    return not isinstance(getattr(conn, "inner", conn), sqlite3.Connection)
 
 
 def _migrate(conn):
@@ -192,6 +192,7 @@ def upsert(conn, table, rows, key="id"):
 
 
 def read_df(conn, sql, params=()):
+    conn = getattr(conn, "inner", conn)  # the dashboard's write-tracking wrapper
     if is_postgres(conn):
         return conn.read_df(sql, params)
     return pd.read_sql_query(sql, conn, params=params)
