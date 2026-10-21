@@ -76,7 +76,8 @@ def _collection_picker(c):
     cols = col.list_collections(c)
     if cols.empty:
         st.info("Create a collection to start planning.")
-    labels = {int(r.id): f"{r.name}" + (f" · {r.season}" if r.season else "") for r in cols.itertuples()}
+    labels = {int(r.id): f"{r.name}" + (f" · {r.season}" if r.season else "") + ("" if r.n_items else " (empty)")
+              for r in cols.itertuples()}
     cid = None
     if labels:
         if st.session_state.get("plan_cid") not in labels:
