@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Padre65 Stock Planner</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0f1216; --surface: #171b21; --surface-2: #1e232b; --border: #2a313b; --border-strong: #3a434f;
+  --text: #e6e8eb; --text-2: #b4bac3; --muted: #8a919c; --accent: #3987e5;
+  --pop: #3987e5; --all: #199e70; --cost: #d95926; --exp: #c98500; --grid: rgba(255,255,255,.07);
+  --good: #0ca30c; --bad: #e66767;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f6f4; --surface: #ffffff; --surface-2: #f3f3f1; --border: #e2e1dd; --border-strong: #cfcdc7;
+  --text: #0b0b0b; --text-2: #3d3c39; --muted: #6b6a66; --accent: #2a78d6;
+  --pop: #2a78d6; --all: #1baf7a; --cost: #eb6834; --exp: #a86f00; --grid: rgba(0,0,0,.07);
+  --good: #0a8a0a; --bad: #d03b3b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: transparent; color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+header { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+input { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; padding: 5px 6px; font: inherit; font-size: 14px; width: 74px; text-align: right; }
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input.changed { border-color: var(--accent); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi .v { font-size: 25px; font-weight: 650; margin-top: 2px; }
+.kpi .d { font-size: 12px; color: var(--text-2); }
+.kpi .v2 { font-size: 17px; font-weight: 600; margin: 1px 0 3px; }
+.kpi .up { color: var(--good); } .kpi .down { color: var(--bad); }
+.kpi .bar { height: 4px; border-radius: 2px; margin-bottom: 8px; }
+.settings { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+.settings label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.product { display: block; }
+.tablewrap { container-type: inline-size; }
+/* chart and notes side by side under the table; they stack when there isn't room for both */
+.lower { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 22px; margin-top: 16px; align-items: start; }
+.lower .log { margin-top: 0; border-top: 0; padding-top: 0; }
+/* when the table itself is too narrow, each colour becomes a labelled card (no sideways scrolling) */
+@container (max-width: 820px) {
+  .ptable thead { display: none; }
+  .ptable tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .ptable td { border: 0; padding: 0; text-align: left; white-space: normal; }
+  .ptable td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .ptable td.colour { grid-column: 1 / -1; }
+  .ptable tr.tot td:not([data-label]) { display: none; }
+  .ptable tr.tot td.l { display: block; grid-column: 1 / -1; }
+}
+.log { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.log h3 { font-size: 14px; margin: 0; }
+.logadd { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+.logbox { width: 100%; min-height: 46px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13.5px; resize: vertical; line-height: 1.45; }
+.logentry { background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; margin-top: 8px; }
+.logmeta { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.logmeta .acts { display: flex; gap: 12px; }
+.logtext { white-space: pre-wrap; margin-top: 4px; font-size: 13.5px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
+.linkbtn.del { color: var(--bad); }
+.phead { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 5px 4px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 11.5px; white-space: nowrap; vertical-align: bottom; }
+td.l.colour { white-space: normal; max-width: 150px; }
+.cell { display: flex; align-items: center; gap: 8px; }
+.thumb { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; background: #fff; flex: none; border: 1px solid var(--border); }
+th.l, td.l { text-align: left; }
+tr.sel td { background: var(--surface-2); }
+tr.tot td { font-weight: 700; border-bottom: 0; }
+td.colour { cursor: pointer; }
+.stepper { display: inline-flex; align-items: center; gap: 2px; }
+.stepper button { padding: 2px 8px; border-radius: 6px; }
+.stepper input { width: 44px; }
+.stepper button { padding: 2px 6px; }
+.hint { font-size: 11px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-2); margin: 6px 0; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+.legend i.dash { background: repeating-linear-gradient(90deg, var(--exp) 0 4px, transparent 4px 7px); }
+svg text { fill: var(--text-2); font-size: 11px; }
+svg .gridline { stroke: var(--grid); }
+svg .axis { stroke: var(--border-strong); }
+#tip { position: fixed; pointer-events: none; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; max-width: 360px; display: none; z-index: 9; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.qm { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 5px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font-size: 10px; font-weight: 700; cursor: help; vertical-align: 1px; }
+.qm:hover { border-color: var(--accent); color: var(--accent); }
+.note { font-size: 12px; color: var(--muted); }
+.warn { font-size: 12px; color: var(--exp); }
+.notebtn { white-space: nowrap; background: none; border: 0; padding: 0; color: var(--accent); font-size: 11.5px; cursor: pointer; text-align: left; }
+.notebtn:hover { text-decoration: underline; }
+.notetext { font-size: 12px; color: var(--text-2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+tr.hasnote td { border-bottom: 0; }
+tr.noterow td { padding: 0 6px 7px 56px; max-width: 0; text-align: left; }
+.notetext:hover { color: var(--text); }
+tr.noteedit td { background: var(--surface-2); white-space: normal; }
+tr.noteedit textarea { width: 100%; min-height: 70px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 13px; resize: vertical; }
+.toggle { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.toggle button { border: 0; border-radius: 0; padding: 4px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Padre65 · Winter 2027 stock planner</h1>
+      <div class="sub" id="coverage"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="sub" id="saved"></span>
+      <button id="save" title="Download a backup of the plan as a file">Download backup</button>
+      <button id="load" title="Replace the shared plan with one from a file: a backup, or a planner file / shareable copy from your computer">Load from file</button>
+      <input type="file" id="file" accept=".json" hidden>
+      <button id="theme">Light</button>
+    </div>
+  </header>
+
+  <div class="card settings" id="settings"></div>
+  <div class="card" id="demand"></div>
+  <div class="card" id="extras"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="card">
+    <div class="phead"><h2>Stock vs expected sales, every colourway</h2>
+      <div class="legend"><span><i style="background:var(--pop)"></i>units you're buying</span><span><i class="dash"></i>expected to sell at the 2 pop-ups</span></div></div>
+    <div id="overview"></div>
+    <div class="note">Bars past the yellow marker are stock you'd still hold after the pop-ups; bars short of it may sell out.</div>
+  </div>
+  <div id="products"></div>
+  <div class="note" id="foot"></div>
+</div>
+<div id="tip"></div>
+
+<script>
+"use strict";
+// ---- Streamlit bridge: the plan comes from the app's database and every change is sent back to be saved ----
+const ST = { send(type, extra) { window.parent.postMessage({ isStreamlitMessage: true, type, ...extra }, "*"); } };
+let started = false;
+window.addEventListener("message", ev => {
+  const d = ev.data;
+  if (!d || d.type !== "streamlit:render") return;
+  if (!started) { started = true; main(d.args); } else if (window.__update) window.__update(d.args);
+});
+ST.send("streamlit:componentReady", { apiVersion: 1 });
+// keep the app's frame as tall as the planner (re-sent whenever the page changes size; checked regularly as a fallback)
+let lastHeight = 0;
+function sendHeight() { const h = document.documentElement.scrollHeight + 4; if (h !== lastHeight) { lastHeight = h; ST.send("streamlit:setFrameHeight", { height: h }); } }
+new ResizeObserver(sendHeight).observe(document.documentElement);
+setInterval(sendHeight, 700);
+
+function main(ARGS) {
+const SEED = { ...ARGS.start, ...ARGS.history, days: ARGS.start.days || 121 };
+const SESSION = ARGS.session;
+let version = ARGS.version, saveTimer = null, saveCount = 0, lastSaved = { at: ARGS.updatedAt, by: ARGS.updatedBy };
+const KEY = "padre65-stock-planner-v1";
+const gbp = (v, d = 0) => v == null || !isFinite(v) ? "–" : (v < 0 ? "-" : "") + "£" + Math.abs(v).toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const num = v => v === "" || v == null ? null : Number(v);
+const tiers = t => String(t || "").split(";").map(p => p.split(":").map(Number)).filter(p => p.length === 2 && isFinite(p[0]) && isFinite(p[1])).sort((a, b) => a[0] - b[0]);
+
+let state = pickState();
+function pickState() {
+  const stored = load();
+  if (SEED.shareId && (!stored || stored.shareId !== SEED.shareId)) {
+    if (stored) { try { localStorage.setItem(KEY + "-backup", JSON.stringify(stored)); } catch (e) {} }
+    const s = fresh(); s.shareId = SEED.shareId; return s;
+  }
+  return stored || fresh();
+}
+state.demand = { ...SEED.demand, ...(state.demand || {}) };
+if (state.popupCost == null) state.popupCost = SEED.popupCost ?? 1500;
+state.selected = state.selected || {};
+let editingLog = null;  // "product|entry id" being edited
+function fresh() { const s = JSON.parse(JSON.stringify(SEED)); s.selected = {}; return withLogs(s); }
+function load() { return ARGS.plan && ARGS.plan.lines ? withImages(JSON.parse(JSON.stringify(ARGS.plan))) : null; }
+// product photos always come from the file itself (a plan saved before they were added still gets them)
+function withImages(s) {
+  const img = ARGS.images || {};
+  s.lines.forEach(l => {
+    if (img[l.id]) l.img = img[l.id];
+    const sl = SEED.lines.find(x => x.id === l.id); if (sl) l.group = sl.group;
+    if (sl && l.emb === undefined) { l.emb = sl.emb; l.lab = sl.lab; l.ship = sl.ship; delete l.extra; }
+    // plans saved before the whole-range model: keep an expected figure only if you had changed it
+    if (l.expectedManual === undefined) l.expectedManual = l.seedExpected != null && l.expected !== l.seedExpected ? l.expected : null;
+  });
+  return withLogs(s);
+}
+// Notes are one dated log per product. Plans saved with a note on each colour are converted once.
+function withLogs(s) {
+  if (s.logs) return s;
+  s.logs = {};
+  const byProduct = {};
+  for (const l of s.lines) (byProduct[l.product] = byProduct[l.product] || []).push(l);
+  for (const [product, lines] of Object.entries(byProduct)) {
+    const withNote = lines.filter(l => l.note && l.note.trim());
+    if (!withNote.length) { s.logs[product] = JSON.parse(JSON.stringify((SEED.logs || {})[product] || [])); continue; }
+    const same = withNote.every(l => l.note.trim() === withNote[0].note.trim());
+    s.logs[product] = (same ? [withNote[0]] : withNote).map((l, i) => ({
+      id: Date.now() + i, at: l.noteUpdated || new Date().toISOString(), edited: null,
+      text: same || !l.colour ? l.note.trim() : `${l.colour}: ${l.note.trim()}` }));
+  }
+  for (const l of s.lines) { delete l.note; delete l.noteUpdated; }
+  return s;
+}
+function savedText() {
+  if (!lastSaved.at) return "Not saved yet";
+  return `Saved for both of you · last change ${lastSaved.by ? `by ${lastSaved.by}, ` : ""}${fmtWhen(lastSaved.at)}`;
+}
+// changes are sent to the app (which saves them to the database) once you pause for a moment
+function persist() {
+  document.getElementById("saved").textContent = "Saving…";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const plan = JSON.parse(JSON.stringify(state));
+    plan.lines.forEach(l => delete l.img);
+    for (const k of ["history", "coverage", "popupUnits", "popupOrders", "popupNet", "selected"]) delete plan[k];
+    ST.send("streamlit:setComponentValue", { value: { plan, base: version, nonce: `${SESSION}-${++saveCount}` }, dataType: "json" });
+  }, 700);
+}
+// the app re-renders after each save, or with your partner's changes when the page reloads
+window.__update = a => {
+  if (a.version > version) {
+    const mine = a.updatedSession === SESSION;
+    version = a.version; lastSaved = { at: a.updatedAt, by: a.updatedBy };
+    if (!mine && a.plan) { state = withImages(JSON.parse(JSON.stringify(a.plan))); state.demand = { ...SEED.demand, ...(state.demand || {}) }; render(); }
+  }
+  document.getElementById("saved").textContent = savedText();
+};
+
+// supplier price at a quantity (price breaks), plus extras = cost per unit; your own cost overrides it
+function quotedPrice(l, q) { let p = l.base; for (const [mq, mp] of tiers(l.tiers)) if (q >= mq) p = mp; return p; }
+// your own supplier price (e.g. after negotiating) replaces the quote and its price breaks
+function supplierPrice(l, q) { return l.supplierOverride != null ? l.supplierOverride : quotedPrice(l, q); }
+function extras(l) { return (l.emb || 0) + (l.lab || 0) + (l.ship || 0); }
+function costAt(l, q) { return l.cost != null ? l.cost : supplierPrice(l, q) + extras(l); }
+function net(l) { return l.price * (1 - state.discount); }
+function outcome(l, q, exp = l.expected) {
+  const c = costAt(l, q), n = net(l), sold = Math.min(q, exp);
+  const left = Math.max(0, q - exp);
+  return { cost: c, spend: q * c, popupRevenue: sold * n, popupProfit: sold * n - q * c, soldProfit: sold * (n - c),
+           allRevenue: q * n, allProfit: q * (n - c), left, leftRevenue: left * n, leftCost: left * c };
+}
+
+// ---------- demand: one total per product type, shared by everything of that type on sale ----------
+// type total = (sales per pop-up x pop-ups x size vs last + online sales over the season) x choice effect x your emphasis
+// choice effect = (designs on sale / designs that sold before) ^ strength: more choice adds a little, not a full extra item's worth
+// the total is shared by your new colourways (by weight) and older stock (each older design, capped at the units you hold)
+let DEMAND = {};
+function computeDemand() {
+  const d = state.demand, types = {};
+  for (const l of state.lines) (types[l.group] = types[l.group] || []).push(l);  // substitutes share one demand pool
+  DEMAND = {};
+  for (const [type, lines] of Object.entries(types)) {
+    const h = SEED.history[type] || {}, src = SEED.history[h.borrow] || h;
+    const onSale = lines.filter(l => l.units > 0);
+    const old = d.oldCompete ? (h.old || []) : [];
+    const designs = onSale.length + old.reduce((a, o) => a + Math.min(1, o.units / 3), 0);  // an older design with 1-2 units left only counts partly
+    const choice = src.histProducts ? Math.pow(Math.max(designs, 1) / src.histProducts, d.choice) : 1;
+    // per pop-up = what sold last time + an allowance for sizes that sold out (the history figure is at 25%)
+    const perPopup = src.lastPopup + (src.perPopup - src.lastPopup) * d.soldout / 0.25;
+    const popups = perPopup * d.popups * d.scale, online = src.online30 / 30 * SEED.days * d.online;
+    const total = (popups + online) * choice * (d.emphasis[type] ?? 1);
+    // share out: fixed (typed) rows first, then new lines by weight and older designs equally, older ones capped at their stock
+    const fixed = onSale.filter(l => l.expectedManual != null);
+    let pool = Math.max(0, total - fixed.reduce((a, l) => a + l.expectedManual, 0));
+    const takers = [...onSale.filter(l => l.expectedManual == null).map(l => ({ l, w: l.weight ?? 1, cap: Infinity })),
+                    ...old.map(o => ({ o, w: 1, cap: o.units }))];
+    const got = new Map();
+    let active = takers.slice();
+    for (let guard = 0; guard < 20 && active.length && pool > 1e-9; guard++) {
+      const W = active.reduce((a, t) => a + t.w, 0), next = [];
+      let spent = 0;
+      for (const t of active) {
+        const give = pool * t.w / W, have = got.get(t) || 0, room = t.cap - have;
+        if (give >= room) { got.set(t, t.cap); spent += room; } else { got.set(t, have + give); spent += give; next.push(t); }
+      }
+      pool -= spent;
+      if (next.length === active.length) break;
+      active = next;
+    }
+    const oldTake = takers.filter(t => t.o).reduce((a, t) => a + (got.get(t) || 0), 0);
+    for (const l of lines) l.expected = l.units > 0 ? (l.expectedManual != null ? l.expectedManual : Math.round((got.get(takers.find(t => t.l === l)) || 0) * 10) / 10) : 0;
+    const newTake = onSale.reduce((a, l) => a + l.expected, 0);
+    DEMAND[type] = { type, src: h.label || "your sales history", lastPopup: src.lastPopup,
+                     perPopup, popups, online, designs, histProducts: src.histProducts, newDesigns: onSale.length, oldDesigns: old.length,
+                     oldUnits: old.reduce((a, o) => a + o.units, 0), oldList: old.map(o => `${o.name} (${o.units})`).join(", "),
+                     choice, total, oldTake, newTake };
+  }
+}
+
+// ---------- render ----------
+function render() {
+  computeDemand();
+  document.getElementById("coverage").textContent = SEED.coverage;
+  document.getElementById("saved").textContent = savedText();
+  renderSettings(); renderDemand(); renderExtras(); renderKpis(); renderOverview(); renderProducts();
+  document.getElementById("foot").innerHTML = SEED.foot;
+  document.getElementById("theme").textContent = document.documentElement.dataset.theme === "light" ? "Dark" : "Light";
+}
+function renderSettings() {
+  document.getElementById("settings").innerHTML = `
+    <div><label>Budget (£)${qm("budget")}</label><input data-set="budget" value="${state.budget ?? ""}" style="width:100px"></div>
+    <div><label>Fixed costs per pop-up (£)${qm("popupcost")}</label><input data-set="popupCost" value="${state.popupCost ?? ""}" style="width:80px"></div>
+    <div><label>Average discount customers get${qm("discount")}</label><input data-set="discount" value="${Math.round(state.discount * 100)}" style="width:60px"> %</div>
+    <div class="note" style="max-width:520px">Change the <b>selling price</b>, <b>units</b> and <b>expected sales</b> on any colourway. Expected sales come from the whole-range demand below; type your own on any colour and the rest of that product type re-shares. Discount is your average so far (${Math.round(SEED.discount * 100)}%).</div>`;
+}
+// "?" with a hover explanation; the examples use the current numbers
+function qm(key) { return `<span class="qm" data-tip="${esc(helpText(key))}">?</span>`; }
+function helpText(key) {
+  const tees = DEMAND["Tees"], th = SEED.history["Tees"] || {}, d = state.demand;
+  const soldOutUnits = Math.round(((th.perPopup || 0) - (th.lastPopup || 0)) / 0.25);
+  const online = Object.values(DEMAND).filter(r => r.online >= 1).map(r => `${Math.round(r.online)} ${r.type.toLowerCase()}`).join(", ");
+  const T = {
+    budget: "All the cash you have for this collection: stock at cost (incl. shipping and embroidery) plus samples still to pay. The <b>Cash needed</b> tile compares your order with it. It doesn't change any expected sales.",
+    discount: `The average discount customers got on your sales so far (${Math.round(SEED.discount * 100)}%). Every selling price is reduced by this before revenue and profit are worked out, e.g. a £150 knit brings in ${gbp(150 * (1 - state.discount), 2)}.`,
+    popups: `How many pop-ups you'll run between December and March. Each one adds a pop-up's worth of sales to every product group (sized by the next setting). The last pop-up sold <b>${SEED.popupUnits} units</b> (${gbp(SEED.popupNet)}).`,
+    scale: `How big each pop-up will be compared with the last one (${SEED.popupUnits} units, ${gbp(SEED.popupNet)}, ${SEED.popupOrders} orders). <b>×1</b> = the same · <b>×1.5</b> = half as big again (bigger venue, more footfall) · <b>×0.75</b> = smaller. Applies to every product group.`,
+    soldout: `Some sizes sold out at the last pop-up, so they might have sold more. This adds back that % of what those sizes sold. E.g. tees + long sleeves sold <b>${th.lastPopup}</b>, ${soldOutUnits} of them in sizes that sold out: at ${Math.round(d.soldout * 100)}% the plan uses <b>${tees ? tees.perPopup.toFixed(0) : "–"} per pop-up</b>; at 0% exactly ${th.lastPopup}. Caps don't change (no cap sold out there).`,
+    online: `Online sales from December to March, at the rate each group has sold online since it launched. At the current setting that's about ${online || "none"}. <b>×1.5</b> if you'll push online harder · <b>×0</b> to plan on the pop-ups only.`,
+    choice: `When more designs are on sale than have sold before, a group sells a bit more in total, but each extra design adds less than the last. Group total × (designs now ÷ designs before) to the power of this number.${tees ? ` Tees: ≈${tees.designs.toFixed(0)} designs on sale vs ${tees.histProducts} that sold before → <b>${tees.choice >= 1 ? "+" : ""}${Math.round((tees.choice - 1) * 100)}%</b> at ${d.choice}.` : ""} <b>0</b> = no extra sales (the same total split more ways) · <b>0.3</b> = a little · <b>1</b> = each design brings its full share (unrealistic).`,
+    extras: "Supplier price: the quote at your quantity (with its price breaks); type your own agreed price to replace it, clear it to go back. Then what each unit costs on top: embroidery or screen printing, your own labels and inbound shipping. Pre-filled from your cost sheet and label spend; change any figure and every colour of that product updates. Typing your own all-in cost on a colour (click its cost) overrides this.",
+    popupcost: `Running costs for each pop-up that aren't stock: venue or stall fee, fit-out, staff, travel, card machine, bags and so on. Assumed at £1,500 a pop-up; change it if you know better. × ${state.demand.popups} pop-ups = ${gbp((state.popupCost || 0) * state.demand.popups)}, counted in Cash needed and the profit-after-everything tiles (not in each product's profit).`,
+    old: `Your older stock (${Object.values(SEED.history || {}).map(h => `${(h.old || []).reduce((a, o) => a + o.units, 0)} ${h.label ? "" : ""}`).length ? Object.entries(SEED.history).map(([g, h]) => `${(h.old || []).reduce((a, o) => a + o.units, 0)} ${g.toLowerCase()}`).filter(t => !t.startsWith("0 ")).join(", ") : "none"}) will be on the table too, so it takes a share of each group's sales: each older design up to the units you still hold (a design with 1 left can't take much). Untick to see the new collection as if nothing else was on sale.`,
+  };
+  return T[key] || "";
+}
+function renderDemand() {
+  const d = state.demand, rows = Object.values(DEMAND);
+  const all = rows.reduce((a, r) => { a.total += r.total; a.newTake += r.newTake; a.oldTake += r.oldTake; a.pop += r.popups * r.choice; return a; }, { total: 0, newTake: 0, oldTake: 0, pop: 0 });
+  document.getElementById("demand").innerHTML = `
+    <div class="phead"><h2>Demand: the whole sales picture</h2>
+      <div class="note">Last pop-up: <b>${SEED.popupUnits} units</b> from ${SEED.popupOrders} orders (${gbp(SEED.popupNet)}).</div></div>
+    <div class="settings" style="margin-bottom:10px">
+      <div><label>Pop-ups this season${qm("popups")}</label><input data-dset="popups" value="${d.popups}" style="width:50px"></div>
+      <div><label>Each pop-up vs the last one${qm("scale")}</label>× <input data-dset="scale" value="${d.scale}" style="width:56px"></div>
+      <div><label>Allowance for sizes that sold out${qm("soldout")}</label><input data-dset="soldout" value="${Math.round(d.soldout * 100)}" style="width:50px"> %</div>
+      <div><label>Online sales vs history${qm("online")}</label>× <input data-dset="online" value="${d.online}" style="width:56px"></div>
+      <div><label>How much extra choice adds${qm("choice")}</label><input data-dset="choice" value="${d.choice}" style="width:56px">
+        <div class="hint">0 = none · 0.3 = a little · 1 = fully</div></div>
+      <div><label><input type="checkbox" data-dset="oldCompete" ${d.oldCompete ? "checked" : ""} style="width:auto"> Older stock is on sale too${qm("old")}</label>
+        <div class="hint">it takes a share, up to the units you hold</div></div>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th class="l">Products sharing demand</th><th>Sold at last pop-up</th><th>Per pop-up (incl. sold-out allowance)</th><th>Pop-ups total</th><th>Online, Dec–Mar</th>
+        <th>Designs on sale (new + older)</th><th>Choice effect</th><th>Your emphasis</th><th>Expected sales, whole type</th><th>Older stock takes</th><th>Your new colours get</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="l"><b>${esc(r.type)}</b><div class="hint">${esc(r.src)}</div></td><td>${r.lastPopup}</td><td>${r.perPopup.toFixed(1)}</td>
+        <td>${r.popups.toFixed(0)}</td><td>${r.online.toFixed(0)}</td>
+        <td title="${esc(r.oldList)}">${r.newDesigns} + ${r.oldDesigns}${r.oldDesigns ? `<div class="hint">${r.oldUnits} older units</div>` : ""}</td>
+        <td title="${r.designs.toFixed(1)} designs on sale vs ${r.histProducts} that have sold before">×${r.choice.toFixed(2)}</td><td>× <input data-emph="${esc(r.type)}" value="${d.emphasis[r.type] ?? 1}" style="width:46px"></td>
+        <td><b>${r.total.toFixed(0)}</b></td><td>${r.oldTake.toFixed(0)}</td><td><b>${r.newTake.toFixed(0)}</b></td></tr>`).join("")}
+      <tr class="tot"><td class="l">All types</td><td></td><td></td><td>${all.pop.toFixed(0)}</td><td></td><td></td><td></td><td></td><td>${all.total.toFixed(0)}</td><td>${all.oldTake.toFixed(0)}</td><td>${all.newTake.toFixed(0)}</td></tr>
+    </tbody></table></div>
+    <div class="note" style="margin-top:6px">Products customers choose between share one total (tees with long sleeves, hoodies with knitwear), shared by everything of that kind on the table: your new colours (equally, unless you change a colour's "pull" or type your own number)
+      and the older designs you still hold (each capped at its units, so a design with 1 left can't take much). Adding a colour mostly splits the same sales further; extra choice only adds a little.
+      Use emphasis for things history can't see, e.g. ×1.5 on knitwear for winter. Hover the designs figure to see the older stock.</div>`;
+}
+function renderExtras() {
+  const rows = groups().map(([product, lines]) => {
+    const l = lines.find(x => x.units > 0) || lines[0], unitsAll = lines.reduce((a, x) => a + x.units, 0);
+    const extra = extras(l), extraCash = lines.reduce((a, x) => a + x.units * extras(x), 0);
+    const inp = f => `<input data-extra="${esc(product)}|${f}" value="${l[f] ?? 0}" style="width:58px" class="${l[f] !== (SEED.lines.find(x => x.id === l.id) || {})[f] ? "changed" : ""}">`;
+    return `<tr><td class="l colour"><div class="cell">${l.img ? `<img class="thumb" src="${l.img}" alt="" style="width:32px;height:32px">` : ""}<div><b>${esc(product)}</b><div class="hint" style="white-space:normal">${esc(l.extraNote || "")}</div></div></div></td>
+      <td data-label="Supplier price">£<input data-extra="${esc(product)}|supplierOverride" value="${l.supplierOverride ?? ""}" placeholder="${quotedPrice(l, l.units).toFixed(2)}" class="${l.supplierOverride != null ? "changed" : ""}" style="width:64px" title="Quoted ${gbp(quotedPrice(l, l.units), 2)} at your quantity. Type the price you've agreed; clear it to go back to the quote and its price breaks.">
+        ${l.supplierOverride != null ? `<div class="hint">quote ${gbp(quotedPrice(l, l.units), 2)}</div>` : ""}</td><td data-label="Embroidery / print">£${inp("emb")}</td><td data-label="Labels">£${inp("lab")}</td><td data-label="Shipping in">£${inp("ship")}</td>
+      <td data-label="Extras per unit"><b>${gbp(extra, 2)}</b></td><td data-label="Cost per unit"><b>${gbp(costAt(l, l.units), 2)}</b></td><td data-label="Extras on your order">${unitsAll ? gbp(extraCash) : "–"}</td></tr>`;
+  }).join("");
+  const total = state.lines.reduce((a, x) => a + x.units * extras(x), 0);
+  document.getElementById("extras").innerHTML = `
+    <div class="phead"><h2>Extra costs per unit${qm("extras")}</h2><div class="note">These ${gbp(total)} are included in every cost, profit and cash figure.</div></div>
+    <div class="tablewrap"><table class="ptable">
+      <thead><tr><th class="l">Product</th><th>Supplier price</th><th>Embroidery / print</th><th>Labels</th><th>Shipping in</th><th>Extras per unit</th><th>Cost per unit</th><th>Extras on your order</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="note" style="margin-top:6px">From your cost sheet (embroidery and screen printing per unit on past products, inbound shipping) and your label spend so far divided by the units made.
+      Relabelling labour isn't included: add it to Labels if someone charges to sew labels into the untagged WATC blanks.</div>`;
+}
+function totals() {
+  const t = { units: 0, spend: 0, popupProfit: 0, soldProfit: 0, popupRevenue: 0, allRevenue: 0, allProfit: 0, expected: 0, left: 0, leftRevenue: 0, leftCost: 0, samples: 0 };
+  for (const l of state.lines) { const o = outcome(l, l.units); t.units += l.units; t.spend += o.spend; t.popupProfit += o.popupProfit; t.allRevenue += o.allRevenue;
+    t.allProfit += o.allProfit; t.soldProfit += o.soldProfit; t.popupRevenue += o.popupRevenue; t.leftRevenue += o.leftRevenue; t.leftCost += o.leftCost;
+    t.expected += Math.min(l.units, l.expected); t.left += o.left; t.samples += l.units ? (l.samples || 0) : 0; }
+  return t;
+}
+function renderKpis() {
+  const t = totals(), b = num(state.budget), fixed = (state.popupCost || 0) * state.demand.popups, cash = t.spend + t.samples + fixed;
+  const parts = `stock ${gbp(t.spend)}${t.samples ? ` + samples ${gbp(t.samples)}` : ""}${fixed ? ` + pop-up costs ${gbp(fixed)}` : ""}`;
+  const tiles = [
+    ["Units to buy", t.units.toLocaleString("en-GB"), `${Math.round(t.expected)} expected to sell · ${Math.round(t.left)} left over`, "var(--border-strong)"],
+    ["Cash needed", gbp(cash), `${parts}${b ? `<br>${gbp(Math.abs(b - cash))} ${b >= cash ? "under" : "over"} your ${gbp(b)} budget` : ""}`, b && cash > b ? "var(--bad)" : "var(--cost)"],
+    ["Expected sales", `${Math.round(t.expected)} units`, vsLast(t), "var(--pop)", `${gbp(t.popupRevenue)} in sales`],
+    ["Profit on the units sold", gbp(t.soldProfit), `the ${Math.round(t.expected)} expected to sell: their sales − their own cost (before samples and pop-up costs)`, "var(--pop)"],
+    ["Profit from the pop-ups, after paying for everything", gbp(t.popupRevenue - cash), `sales of the ${Math.round(t.expected)} expected to sell (${gbp(t.popupRevenue)}) − cash needed (${gbp(cash)}: ${parts})`, "var(--pop)"],
+    ["Revenue still to come after the pop-ups", gbp(t.leftRevenue), `if the ${Math.round(t.left)} left over sell later (they cost ${gbp(t.leftCost)})`, "var(--exp)"],
+    ["Revenue if everything sells", gbp(t.allRevenue), `all ${t.units} units, after the average discount`, "var(--all)"],
+    ["Potential profit if everything sells", gbp(t.allRevenue - cash), `revenue if all ${t.units} sell (${gbp(t.allRevenue)}) − cash needed (${gbp(cash)})`, "var(--all)"],
+  ];
+  document.getElementById("kpis").innerHTML = tiles.map(([l, v, d, c, v2]) => `<div class="kpi"><div class="bar" style="background:${c}"></div><div class="l">${l}</div><div class="v ${v.startsWith("-") ? "neg" : ""}">${v}</div>${v2 ? `<div class="v2">${v2}</div>` : ""}<div class="d">${d}</div></div>`).join("");
+}
+// Compare the new collection's expected sales with the last pop-up repeated for this season's number of pop-ups
+function vsLast(t) {
+  const n = state.demand.popups, lastU = SEED.popupUnits * n, lastR = SEED.popupNet * n;
+  const du = t.expected / lastU - 1, dr = t.popupRevenue / lastR - 1;
+  const f = v => `<span class="${v >= 0 ? "up" : "down"}">${v >= 0 ? "+" : ""}${Math.round(v * 100)}%</span>`;
+  const older = Object.values(DEMAND).reduce((a, r) => a + r.oldTake, 0);
+  return `vs last pop-up × ${n}: ${lastU} units / ${gbp(lastR)} → ${f(du)} units, ${f(dr)} sales.<br>New collection only, incl. online; older stock adds ≈ ${Math.round(older)} more units.`;
+}
+function renderOverview() {
+  const rows = state.lines, W = 1240, rowH = 21, padL = 300, padR = 60, H = rows.length * rowH + 24;
+  const max = Math.max(1, ...rows.map(l => Math.max(l.units, l.expected)));
+  const x = v => padL + (W - padL - padR) * v / max;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for (const t of ticks(max)) s += `<line class="gridline" x1="${x(t)}" x2="${x(t)}" y1="0" y2="${H - 18}"/><text x="${x(t)}" y="${H - 4}" text-anchor="middle">${t}</text>`;
+  rows.forEach((l, i) => {
+    const y = i * rowH + 4, o = outcome(l, l.units);
+    s += `<text x="${padL - 8}" y="${y + 9}" text-anchor="end" dominant-baseline="middle">${esc(l.product)} · ${esc(l.colour || "")}</text>`;
+    s += `<rect x="${padL}" y="${y}" width="${Math.max(0, x(l.units) - padL)}" height="14" rx="3" fill="var(--pop)" data-tip="<b>${esc(l.product)} · ${esc(l.colour)}</b><br>Buying ${l.units} · expected ${l.expected}<br>Pop-up profit ${gbp(o.popupProfit)} · potential ${gbp(o.allProfit)}"/>`;
+    s += `<rect x="${x(l.expected) - 1.5}" y="${y - 3}" width="3" height="20" fill="var(--exp)"/>`;
+    s += `<text x="${x(l.units) + 6}" y="${y + 9}" dominant-baseline="middle" class="${o.popupProfit < 0 ? "neg" : ""}" style="fill:${o.popupProfit < 0 ? "var(--bad)" : "var(--text-2)"}">${l.units} · ${gbp(o.popupProfit)}</text>`;
+  });
+  document.getElementById("overview").innerHTML = s + `<line class="axis" x1="${padL}" x2="${padL}" y1="0" y2="${H - 18}"/></svg>`;
+}
+function groups() { const m = new Map(); for (const l of state.lines) { if (!m.has(l.product)) m.set(l.product, []); m.get(l.product).push(l); } return [...m.entries()]; }
+function renderProducts() {
+  document.getElementById("products").innerHTML = groups().map(([product, lines], gi) => {
+    const sel = lines.find(l => l.id === state.selected[product]) || lines[0];
+    const tot = lines.reduce((a, l) => { const o = outcome(l, l.units); a.u += l.units; a.p += o.popupProfit; a.r += o.allRevenue; a.a += o.allProfit; return a; }, { u: 0, p: 0, r: 0, a: 0 });
+    const info = lines[0];
+    const dm = DEMAND[info.group];
+    const pic = dm ? `${esc(info.group)}: ≈ ${dm.total.toFixed(0)} sales this season in total (${dm.src}); ${dm.oldDesigns ? `older stock (${dm.oldUnits} units) takes ≈ ${dm.oldTake.toFixed(0)}, ` : ""}${dm.newDesigns} new colour${dm.newDesigns === 1 ? "" : "s"} share ≈ ${dm.newTake.toFixed(0)}` : "";
+    return `<div class="card"><div class="phead"><div><h2>${esc(product)}</h2><div class="note">${esc(info.supplier)}</div><div class="note">${pic}</div></div>
+      ${info.warn ? `<div class="warn">${esc(info.warn)}</div>` : ""}</div>
+      <div class="product"><div class="tablewrap"><table class="ptable">
+        <thead><tr><th class="l">Colour</th><th>Price</th><th>Units</th><th title="Expected to sell at the 2 pop-ups + online">Exp. sales</th><th>Cost / unit</th><th title="Expected profit from the 2 pop-ups">Pop-up profit</th><th title="Revenue if every unit sells">Revenue (all)</th><th title="Total potential profit if every unit sells">Profit (all)</th></tr></thead><tbody>
+        ${lines.map(l => { const o = outcome(l, l.units); const nb = nextBreak(l);
+          return `<tr class="${l === sel ? "sel" : ""}"><td class="l colour" data-pick="${esc(product)}|${l.id}"><div class="cell">${l.img ? `<img class="thumb" src="${l.img}" alt="" data-tip="<img src='${l.img}' style='width:200px;border-radius:6px;background:#fff;display:block'><div style='margin-top:6px'><b>${esc(l.product)}</b> ${esc(l.colour || "")}</div>">` : ""}<span>${esc(l.colour || "One colour")}</span></div></td>
+          <td data-label="Selling price">£<input data-line="${l.id}" data-f="price" value="${l.price}" class="${l.price !== l.seedPrice ? "changed" : ""}" style="width:56px"></td>
+          <td data-label="Units to buy"><span class="stepper"><button data-step="${l.id}|-1">−</button><input data-line="${l.id}" data-f="units" value="${l.units}"><button data-step="${l.id}|1">+</button></span></td>
+          <td data-label="Expected sales"><input data-line="${l.id}" data-f="expected" value="${l.expectedManual != null ? l.expectedManual : ""}" placeholder="${l.expected}" class="${l.expectedManual != null ? "changed" : ""}" style="width:46px" title="Worked out from the whole-range demand. Type your own to fix it; clear the box to go back.">
+            ${l.units > 0 && DEMAND[l.group] && DEMAND[l.group].total ? `<div class="hint">${Math.round(100 * l.expected / DEMAND[l.group].total)}% of ${esc(l.group.toLowerCase())}</div>` : ""}
+            ${l.units > 0 && l.expectedManual == null ? `<div class="hint" title="Popularity vs the other colours of this product type: ×2 = expect it to sell twice as well, ×0.5 = half">pull × <input data-line="${l.id}" data-f="weight" value="${l.weight ?? 1}" style="width:38px;padding:1px 3px;font-size:11px" class="${(l.weight ?? 1) !== 1 ? "changed" : ""}"></div>` : ""}</td>
+          <td data-label="Cost per unit">${l.cost != null ? `£<input data-line="${l.id}" data-f="cost" value="${l.cost}" class="changed" style="width:64px">` : `<span data-edit-cost="${l.id}" data-tip="${esc(`<b>${gbp(o.cost, 2)} per unit</b><br>Supplier ${gbp(supplierPrice(l, l.units), 2)} + embroidery/print ${gbp(l.emb || 0, 2)} + labels ${gbp(l.lab || 0, 2)} + shipping ${gbp(l.ship || 0, 2)}<br><span style='opacity:.75'>Change the extras in “Extra costs per unit”; click to type your own all-in cost</span>`)}" style="cursor:text;border-bottom:1px dotted var(--muted)">${gbp(o.cost, 2)}</span>`}
+            ${nb ? `<div class="hint">${nb}</div>` : ""}</td>
+          <td data-label="Profit from the 2 pop-ups" class="${o.popupProfit < 0 ? "neg" : ""}">${gbp(o.popupProfit)}</td><td data-label="Revenue if all sell">${gbp(o.allRevenue)}</td><td data-label="Profit if all sell" class="${o.allProfit < 0 ? "neg" : ""}">${gbp(o.allProfit)}</td></tr>
+`; }).join("")}
+        ${lines.length > 1 ? `<tr class="tot"><td class="l">Total</td><td></td><td data-label="Units">${tot.u}</td><td></td><td></td><td data-label="Pop-up profit" class="${tot.p < 0 ? "neg" : ""}">${gbp(tot.p)}</td><td data-label="Revenue (all)">${gbp(tot.r)}</td><td data-label="Profit (all)">${gbp(tot.a)}</td></tr>` : ""}
+        </tbody></table>${info.samples ? `<div class="note" style="margin-top:6px">Plus ${gbp(info.samples)} sample cost still to pay (in Cash needed, not in profit).</div>` : ""}</div></div>
+        <div class="lower"><div class="chartbox"><div class="phead" style="margin-bottom:0"><div class="note">Stocking options for <b>${esc(product)}</b>${lines.length > 1 ? ", all colours combined" : ""}</div></div>
+          <div class="legend"><span><i style="background:var(--pop)"></i>expected profit from the 2 pop-ups (£)</span><span><i style="background:var(--all)"></i>total potential profit if everything sells (£)</span><span><i class="dash"></i>expected sales (${Math.round(lines.reduce((a, l) => a + l.expected, 0) * 10) / 10})</span><span><i style="background:var(--text)"></i>your units (${lines.reduce((a, l) => a + l.units, 0)})</span></div>
+          ${chart(lines)}</div>${renderLog(product, gi, lines)}</div></div>`;
+  }).join("");
+}
+function fmtWhen(iso) { return new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+function renderLog(product, gi, lines) {
+  const entries = [...(state.logs[product] || [])].sort((a, b) => b.at.localeCompare(a.at));
+  const colours = lines.map(l => l.colour).filter(Boolean).join(" / ");
+  return `<div class="log"><div class="phead" style="margin-bottom:0"><h3>Notes${colours ? ` · ${esc(colours)}` : ""}</h3>
+      <span class="note">${entries.length} entr${entries.length === 1 ? "y" : "ies"}, newest first</span></div>
+    <div class="logadd"><textarea class="logbox" id="logadd-${gi}" placeholder="Add a dated note: supplier replies, quality, why this quantity, what to check next…"></textarea>
+      <button class="on" data-logadd="${gi}" style="white-space:nowrap">Add note</button></div>
+    ${entries.map(e => {
+      const key = `${product}|${e.id}`;
+      if (editingLog === key) return `<div class="logentry"><div class="logmeta"><span>${fmtWhen(e.at)}</span></div>
+        <textarea class="logbox" id="logedit" style="margin-top:6px">${esc(e.text)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="on" data-logsave="${gi}|${e.id}">Save</button><button data-logcancel="1">Cancel</button></div></div>`;
+      return `<div class="logentry"><div class="logmeta"><span>${fmtWhen(e.at)}${e.by ? ` · <b>${esc(e.by)}</b>` : ""}${e.edited ? ` · edited ${fmtWhen(e.edited)}` : ""}</span>
+        <span class="acts"><button class="linkbtn" data-logedit="${gi}|${e.id}">Edit</button><button class="linkbtn del" data-logdel="${gi}|${e.id}">Delete</button></span></div>
+        <div class="logtext">${esc(e.text)}</div></div>`;
+    }).join("")}</div>`;
+}
+function nextBreak(l) {
+  if (l.cost != null || l.supplierOverride != null) return "";
+  const now = supplierPrice(l, l.units);
+  for (const [q, p] of tiers(l.tiers)) if (l.units < q && p < now) return `${q - l.units} more → ${gbp(p + extras(l), 2)} each`;
+  return "";
+}
+
+// ---------- the chart: profit by units ordered ----------
+// Combined outcome for a product at Q units in total, split across its colours like your current order
+// (or by expected sales if nothing is ordered yet)
+function groupMix(lines) {
+  const u = lines.reduce((a, l) => a + l.units, 0), e = lines.reduce((a, l) => a + l.expected, 0);
+  return lines.map(l => u > 0 ? l.units / u : e > 0 ? l.expected / e : 1 / lines.length);
+}
+function groupOutcome(lines, Q, mix) {
+  return lines.reduce((a, l, i) => { const o = outcome(l, Q * mix[i]); a.popup += o.popupProfit; a.all += o.allProfit; return a; }, { popup: 0, all: 0 });
+}
+function chart(lines) {
+  const W = 520, H = 250, pl = 56, pr = 14, pt = 12, pb = 30;
+  const units = lines.reduce((a, l) => a + l.units, 0), expected = lines.reduce((a, l) => a + l.expected, 0), mix = groupMix(lines);
+  const maxQ = Math.max(10, Math.ceil(Math.max(units, expected) * 1.8), units + 4);
+  const qs = []; for (let q = 1; q <= maxQ; q++) qs.push(q);
+  const pts = qs.map(q => { const o = groupOutcome(lines, q, mix); return { q, a: o.popup, b: o.all }; });
+  const vals = pts.flatMap(p => [p.a, p.b, 0]);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const x = q => pl + (W - pl - pr) * (q - 1) / (maxQ - 1), y = v => pt + (H - pt - pb) * (hi - v) / (hi - lo);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for (const t of ticksRange(lo, hi)) s += `<line class="gridline" x1="${pl}" x2="${W - pr}" y1="${y(t)}" y2="${y(t)}"/><text x="${pl - 6}" y="${y(t)}" text-anchor="end" dominant-baseline="middle">${gbp(t)}</text>`;
+  const step = maxQ > 60 ? 10 : maxQ > 30 ? 5 : maxQ > 15 ? 2 : 1;
+  for (const q of qs) if (q % step === 0 || q === 1) s += `<text x="${x(q)}" y="${H - pb + 16}" text-anchor="middle">${q}</text>`;
+  s += `<text x="${(W + pl) / 2}" y="${H - 2}" text-anchor="middle" style="fill:var(--muted)">units ordered, all colours</text>`;
+  s += `<line x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}" stroke="var(--text-2)" stroke-width="1"/>`;
+  s += `<line x1="${x(Math.max(1, expected))}" x2="${x(Math.max(1, expected))}" y1="${pt}" y2="${H - pb}" stroke="var(--exp)" stroke-dasharray="4 3" stroke-width="1.5"/>`;
+  if (units >= 1) s += `<line x1="${x(units)}" x2="${x(units)}" y1="${pt}" y2="${H - pb}" stroke="var(--text)" stroke-width="1.5"/>`;
+  const path = k => pts.map((p, i) => `${i ? "L" : "M"}${x(p.q).toFixed(1)},${y(p[k]).toFixed(1)}`).join("");
+  s += `<path d="${path("b")}" fill="none" stroke="var(--all)" stroke-width="2.4"/><path d="${path("a")}" fill="none" stroke="var(--pop)" stroke-width="2.4"/>`;
+  const split = q => lines.length > 1 ? `<br><span style='opacity:.75'>${lines.map((l, i) => `${esc(l.colour || "")} ${Math.round(q * mix[i] * 10) / 10}`).join(" · ")}</span>` : "";
+  for (const p of pts) s += `<rect x="${x(p.q) - (W - pl - pr) / maxQ / 2}" y="${pt}" width="${(W - pl - pr) / maxQ}" height="${H - pt - pb}" fill="transparent"
+     data-tip="<b>${p.q} units</b>${split(p.q)}<br>Expected profit from the 2 pop-ups: <b>${gbp(p.a)}</b><br>Total potential profit if everything sells: <b>${gbp(p.b)}</b>"/>`;
+  const cur = pts.find(p => p.q === units);
+  if (cur) s += `<circle cx="${x(cur.q)}" cy="${y(cur.a)}" r="4.5" fill="var(--pop)" stroke="var(--surface)" stroke-width="2"/><circle cx="${x(cur.q)}" cy="${y(cur.b)}" r="4.5" fill="var(--all)" stroke="var(--surface)" stroke-width="2"/>`;
+  const best = pts.reduce((m, p) => p.a > m.a + 1e-9 ? p : m);
+  s += `</svg><div class="note">Combined pop-up profit is highest at <b>${best.q} unit${best.q > 1 ? "s" : ""}</b> in total (${gbp(best.a)}); you're buying ${units} (${gbp(cur ? cur.a : groupOutcome(lines, units, mix).popup)}).
+    Units past the ${Math.round(expected * 10) / 10} expected to sell only pay back if they sell later.</div>`;
+  return s;
+}
+function ticks(max) { const raw = max / 5, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))); const st = [1, 2, 5, 10].map(m => m * mag).find(v => v >= raw) || mag; const o = []; for (let t = 0; t <= max; t += st) o.push(Math.round(t)); return o; }
+function ticksRange(lo, hi) { const raw = (hi - lo) / 5, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))); const st = [1, 2, 2.5, 5, 10].map(m => m * mag).find(v => v >= raw) || mag; const o = []; for (let t = Math.ceil(lo / st) * st; t <= hi; t += st) o.push(t); return o; }
+
+// ---------- events ----------
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.id === "file") return importFile(el.files[0]);
+  if (el.classList && el.classList.contains("logbox")) return;  // typing a note must not re-render
+  if (el.dataset.extra) {
+    const [prod, f] = el.dataset.extra.split("|");
+    const v = f === "supplierOverride" ? (el.value.trim() === "" ? null : Math.max(0, num(el.value) ?? 0)) : Math.max(0, num(el.value) ?? 0);
+    state.lines.filter(x => x.product === prod).forEach(x => { x[f] = v; });
+  }
+  if (el.dataset.set === "budget") state.budget = num(el.value);
+  if (el.dataset.set === "popupCost") state.popupCost = Math.max(0, num(el.value) ?? 0);
+  if (el.dataset.dset) state.demand[el.dataset.dset] = el.type === "checkbox" ? el.checked : el.dataset.dset === "soldout" ? Math.max(0, (num(el.value) ?? 0) / 100) : Math.max(0, num(el.value) ?? 0);
+  if (el.dataset.emph) state.demand.emphasis = { ...state.demand.emphasis, [el.dataset.emph]: Math.max(0, num(el.value) ?? 1) };
+  if (el.dataset.set === "discount") state.discount = Math.min(0.9, Math.max(0, (num(el.value) || 0) / 100));
+  if (el.dataset.line) {
+    const l = state.lines.find(x => x.id == el.dataset.line), f = el.dataset.f, v = num(el.value);
+    if (f === "cost") l.cost = v;
+    else if (f === "expected") l.expectedManual = v != null && v >= 0 ? v : null;
+    else if (v != null && v >= 0) l[f] = f === "units" ? Math.round(v) : v;
+  }
+  persist(); render();
+});
+document.addEventListener("click", e => {
+  const n = e.target.closest("[data-logadd],[data-logedit],[data-logsave],[data-logcancel],[data-logdel]");
+  if (n) {
+    const names = groups().map(([product]) => product);
+    const [gi, id] = (n.dataset.logadd || n.dataset.logedit || n.dataset.logsave || n.dataset.logdel || "").split("|");
+    const product = names[Number(gi)], log = state.logs[product] = state.logs[product] || [];
+    if (n.dataset.logadd) {
+      const box = document.getElementById(`logadd-${gi}`), text = box.value.trim();
+      if (!text) { box.focus(); return; }
+      log.push({ id: Date.now(), at: new Date().toISOString(), edited: null, text, by: ARGS.user || "" });
+    }
+    if (n.dataset.logedit) editingLog = `${product}|${id}`;
+    if (n.dataset.logcancel) editingLog = null;
+    if (n.dataset.logsave) {
+      const e2 = log.find(x => x.id == id), text = document.getElementById("logedit").value.trim();
+      if (e2 && text) { e2.text = text; e2.edited = new Date().toISOString(); }
+      editingLog = null;
+    }
+    if (n.dataset.logdel) {
+      if (!confirm("Delete this note?")) return;
+      state.logs[product] = log.filter(x => x.id != id);
+    }
+    persist(); render();
+    const box = document.getElementById("logedit"); if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+    return;
+  }
+  const t = e.target.closest("[data-step],[data-pick],[data-edit-cost]");
+  if (!t) return;
+  if (t.dataset.step) { const [id, d] = t.dataset.step.split("|"); const l = state.lines.find(x => x.id == id); l.units = Math.max(0, l.units + Number(d)); }
+  if (t.dataset.pick) { const [p, id] = t.dataset.pick.split("|"); state.selected[p] = Number(id); }
+  if (t.dataset.editCost) { const l = state.lines.find(x => x.id == t.dataset.editCost); l.cost = Math.round(costAt(l, l.units) * 100) / 100; }
+  persist(); render();
+});
+const tip = document.getElementById("tip");
+document.addEventListener("mousemove", e => { const t = e.target.closest("[data-tip]"); if (!t) { tip.style.display = "none"; return; }
+  tip.innerHTML = t.dataset.tip; tip.style.display = "block"; tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY + 14) + "px"; });
+document.getElementById("save").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 1)], { type: "application/json" }));
+  a.download = `padre65-stock-plan-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
+document.getElementById("load").onclick = () => document.getElementById("file").click();
+function importFile(f) { if (!f) return; const r = new FileReader(); r.onload = () => { try {
+    if (!confirm("Replace the shared plan (for both of you) with the plan in this file? Notes already in the shared plan are kept.")) return;
+    const m = r.result.match(/<script id="seed" type="application\/json">([\s\S]*?)<\/script>/);
+    const s = JSON.parse(m ? m[1].replace(/<\\\//g, "</") : r.result);
+    if (s.logs && state.logs) for (const [p, es] of Object.entries(state.logs)) { s.logs[p] = s.logs[p] || []; const ids = new Set(s.logs[p].map(e => e.id)); es.forEach(e => { if (!ids.has(e.id)) s.logs[p].push(e); }); } if (!s.lines) throw 0; state = withImages(s); persist(); render(); } catch (e) { alert("That isn't a saved stock plan."); } }; r.readAsText(f); }
+document.getElementById("theme").onclick = () => { const t = document.documentElement.dataset.theme === "light" ? "dark" : "light"; document.documentElement.dataset.theme = t; try { localStorage.setItem(KEY + "-theme", t); } catch (e) {} render(); };
+try { const t = localStorage.getItem(KEY + "-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+render();
+}  // main
+</script>
+</body>
+</html>
