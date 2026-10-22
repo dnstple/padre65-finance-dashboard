@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS plan_scenarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT, collection_id INTEGER NOT NULL, name TEXT NOT NULL, settings TEXT,
     overrides TEXT, notes TEXT, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS stock_plans (
+    id TEXT PRIMARY KEY, plan TEXT, version INTEGER, updated_at TEXT, updated_by TEXT
+);
+CREATE TABLE IF NOT EXISTS stock_plan_images (
+    id TEXT PRIMARY KEY, data TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );

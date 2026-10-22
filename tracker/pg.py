@@ -19,7 +19,7 @@ PRIMARY_KEYS = {
     "manual_transactions": ["id"], "product_costs": ["key"], "product_log": ["id"],
     "categories": ["category"], "category_rules": ["id"], "category_overrides": ["txn_id"],
     "fx_rates": ["date", "currency"], "sync_log": ["source"], "events": ["id"],
-    "event_orders": ["order_id"], "event_costs": ["txn_id"], "stock_writeoffs": ["id"], "planner_overrides": ["variant_id"], "popup_costs": ["id"], "manufacturer_proposals": ["id"], "product_ideas": ["id"], "plan_collections": ["id"], "plan_items": ["id"], "plan_scenarios": ["id"], "seeded_rules": ["pattern", "category", "direction"],
+    "event_orders": ["order_id"], "event_costs": ["txn_id"], "stock_writeoffs": ["id"], "planner_overrides": ["variant_id"], "popup_costs": ["id"], "manufacturer_proposals": ["id"], "product_ideas": ["id"], "plan_collections": ["id"], "plan_items": ["id"], "plan_scenarios": ["id"], "stock_plans": ["id"], "stock_plan_images": ["id"], "seeded_rules": ["pattern", "category", "direction"],
 }
 SERIAL_TABLES = {"manual_transactions", "product_log", "category_rules", "events", "stock_writeoffs", "popup_costs", "manufacturer_proposals", "product_ideas", "plan_collections", "plan_items", "plan_scenarios"}
 

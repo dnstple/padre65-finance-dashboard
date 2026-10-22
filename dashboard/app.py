@@ -7,7 +7,7 @@ from common import require_password, sidebar_status  # noqa: E402
 require_password()
 
 from views import (cash, collection, data, expenses, manual_entry, overview, pnl, products, reports,  # noqa: E402
-                   revenue, stock)
+                   revenue, stock, stock_planner)
 
 pages = {
     "Finance": [
@@ -21,6 +21,7 @@ pages = {
         st.Page(reports.render, title="Reports", icon="📑", url_path="reports"),
     ],
     "Planning": [
+        st.Page(stock_planner.render, title="Stock planner", icon="🧮", url_path="stock-planner"),
         st.Page(collection.render, title="Collection planner", icon="🧭", url_path="collection-planner"),
     ],
     "Input": [

@@ -300,6 +300,7 @@ GLOSSARY = {
     "Sold-out sizes": "Sizes now out of stock after selling, so their real demand was probably higher.",
     "Expected in this period": "What this product would be expected to sell in the collection's selling period and number of events, based on its history.",
     "One size": "Products that come in one size (caps, foulards).",
+    "Stock planner": "The shared Winter 2027 buying plan: units, prices, expected sales, costs and dated notes per product. Saved in the database, so both owners see and edit the same plan.",
     # collection planner (line-up, demand, timeline)
     "Line-up": "Every product and colourway you're considering, with its supplier's terms. One row per colourway.",
     "Supplier": "Who makes or supplies it. Used to group the buy list and work out order-by dates.",

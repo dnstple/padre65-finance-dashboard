@@ -10,6 +10,7 @@
   python sync.py cost-template     write templates/master_costs.xlsx pre-filled with your products
   python sync.py import-costs FILE  import unit costs from the master sheet (xlsx or csv)
   python sync.py import-manual FILE import manual transactions from a CSV
+  python sync.py stock-plan-import FILE [--replace]  load a stock plan (planner file or line-up) into the Stock planner
   python sync.py migrate-to-postgres  copy the local SQLite data into DATABASE_URL (one-off)
   python sync.py demo              build data/demo.db with sample data to try the dashboard
 """
@@ -79,6 +80,16 @@ def main(argv):
     elif cmd == "import-manual":
         n = manual.import_csv(conn, args[0])
         print(f"Imported {n} manual transactions")
+    elif cmd == "stock-plan-import":
+        import json
+        import re
+        from tracker import stockplan
+        text = open(args[0], encoding="utf-8").read()
+        # a planner .html file carries its plan in <script id="seed">; a saved plan is plain JSON
+        m = re.search(r'<script id="seed" type="application/json">(.*?)</script>', text, re.S)
+        plan = json.loads(m.group(1).replace("<\\/", "</") if m else text)
+        n_lines, n_pics = stockplan.import_plan(conn, plan, by="import", replace_live="--replace" in args)
+        print(f"Imported {n_lines} colourways and {n_pics} photos" + (" (live plan replaced)" if "--replace" in args else ""))
     elif cmd not in ("all", "shopify", "wise", "costs"):
         print(__doc__)
 
