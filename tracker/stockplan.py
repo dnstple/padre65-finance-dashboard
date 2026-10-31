@@ -93,6 +93,13 @@ def size_history(v):
     return {"types": {t: sizes(pool) for t, pool in v.groupby("category")}, "products": products}
 
 
+def store_history(conn, ledger):
+    """Save the sales history for the web planner (it reads it from the database; refreshed by every sync)."""
+    conn.execute("INSERT OR REPLACE INTO stock_plan_history (id, data, updated_at) VALUES (?, ?, ?)",
+                 (PLAN_ID, json.dumps(history(conn, ledger), default=lambda o: o.item() if hasattr(o, "item") else str(o)), db.now_iso()))
+    conn.commit()
+
+
 def load(conn, plan_id=PLAN_ID):
     """The saved plan: {plan, version, updated_at, updated_by}, or None if there isn't one yet."""
     row = conn.execute("SELECT plan, version, updated_at, updated_by FROM stock_plans WHERE id = ?", (plan_id,)).fetchone()

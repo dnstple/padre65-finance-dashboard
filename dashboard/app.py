@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Padre65 Finance", page_icon="📊", layout="wide")
 
-from common import require_password, sidebar_status  # noqa: E402
+from common import require_password  # noqa: E402
 
 require_password()
 
@@ -29,6 +29,5 @@ pages = {
         st.Page(data.render, title="Data & sync", icon="🔄", url_path="data"),
     ],
 }
-nav = st.navigation(pages, expanded=True)  # always list every page (no "View more")
-sidebar_status()
+nav = st.navigation(pages, position="top")  # pages in a bar across the top, so every page uses the full width
 nav.run()

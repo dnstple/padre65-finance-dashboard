@@ -1,4 +1,5 @@
 """Stock planner: the shared Winter 2027 buying plan, saved in the database so both owners see and edit the same plan."""
+import os
 import uuid
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from tracker import stockplan
 
 _planner = components.declare_component("stock_planner", path=str(Path(__file__).resolve().parent.parent / "components" / "stock_planner"))
 PEOPLE = ["Daniel", "Santiago"]
+# the same planner as a fast web page (planner/ on Vercel), saving to the same database
+PLANNER_URL = os.environ.get("PLANNER_URL", "https://padre65-stock-planner.vercel.app")
 
 
 @st.cache_resource(max_entries=2, show_spinner=False)
@@ -20,6 +23,10 @@ def _history(ledger_id, _ledger):
 
 def render():
     heading("Stock planner", "title")
+    st.link_button("Open the stock planner ↗", PLANNER_URL, type="primary")
+    st.caption("The planner runs as its own fast web page and saves to the same shared plan. Log in with the planner password.")
+    if not st.toggle("Use it here instead (slower)", key="planner_here"):
+        return
     c = conn()
     a, b = st.columns([3, 2])
     who = a.segmented_control("Who's editing?", PEOPLE, key="planner_who", default=PEOPLE[0],

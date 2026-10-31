@@ -11,6 +11,7 @@
   python sync.py import-costs FILE  import unit costs from the master sheet (xlsx or csv)
   python sync.py import-manual FILE import manual transactions from a CSV
   python sync.py stock-plan-import FILE [--replace]  load a stock plan (planner file or line-up) into the Stock planner
+  python sync.py stock-plan-history refresh the sales history the web stock planner reads (also done by every sync)
   python sync.py migrate-to-postgres  copy the local SQLite data into DATABASE_URL (one-off)
   python sync.py demo              build data/demo.db with sample data to try the dashboard
 """
@@ -56,6 +57,9 @@ def main(argv):
         step("wise", lambda: wise.sync(conn))
     if cmd in ("all", "costs"):
         step("costs_sheet", lambda: costs.sync_sheet(conn))
+    if cmd in ("all", "shopify", "stock-plan-history"):
+        from tracker import reports, stockplan
+        step("stock_plan_history", lambda: stockplan.store_history(conn, reports.Ledger(conn)))
     if failed and cmd in ("all", "shopify", "wise", "costs"):
         sys.exit(f"Failed: {', '.join(failed)}")  # non-zero exit so a scheduled run shows as failed
     if cmd == "wise-csv":
@@ -90,7 +94,7 @@ def main(argv):
         plan = json.loads(m.group(1).replace("<\\/", "</") if m else text)
         n_lines, n_pics = stockplan.import_plan(conn, plan, by="import", replace_live="--replace" in args)
         print(f"Imported {n_lines} colourways and {n_pics} photos" + (" (live plan replaced)" if "--replace" in args else ""))
-    elif cmd not in ("all", "shopify", "wise", "costs"):
+    elif cmd not in ("all", "shopify", "wise", "costs", "stock-plan-history"):
         print(__doc__)
 
 

@@ -1,0 +1,10 @@
+{
+  "name": "padre65-stock-planner",
+  "private": true,
+  "type": "module",
+  "description": "The Padre65 stock planner as a web page: the shared plan in the dashboard's Supabase database, behind a password.",
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}
