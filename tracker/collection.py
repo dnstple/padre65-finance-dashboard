@@ -55,7 +55,11 @@ def _loads(s, default):
 
 
 def list_collections(conn):
-    return db.read_df(conn, "SELECT * FROM plan_collections ORDER BY id DESC")
+    """Collections with products first (newest first within each), so an empty one never hides the real plan."""
+    return db.read_df(conn, """
+        SELECT p.*, (SELECT COUNT(*) FROM plan_items i WHERE i.collection_id = p.id) AS n_items
+        FROM plan_collections p ORDER BY CASE WHEN (SELECT COUNT(*) FROM plan_items i WHERE i.collection_id = p.id) > 0
+        THEN 0 ELSE 1 END, p.id DESC""")
 
 
 def get_collection(conn, cid):
