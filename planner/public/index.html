@@ -130,6 +130,10 @@ tr.noteedit textarea { width: 100%; min-height: 70px; background: var(--surface)
 .sizetable input.mine { border: 2px solid var(--exp); background: color-mix(in srgb, var(--exp) 18%, transparent); color: var(--text); font-weight: 700; }
 .sizetable td.tot { font-weight: 700; }
 .sizebtn.mine { border-color: var(--exp); color: var(--exp); }
+.sizebtn.gap, input.gap { border: 2px solid var(--bad) !important; }
+.sizebtn.gap { color: var(--bad); }
+.gaptext { color: var(--bad) !important; font-weight: 700; }
+.gapnote { grid-column: 1 / -1; border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .sizelog { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 10px; }
 @container (max-width: 820px) {
   .ptable tr.sizerow { display: block; padding: 0 0 12px; }
@@ -419,7 +423,7 @@ function helpText(key) {
     choice: `When more designs are on sale than have sold before, a group sells a bit more in total, but each extra design adds less than the last. Group total × (designs now ÷ designs before) to the power of this number.${tees ? ` Tees: ≈${tees.designs.toFixed(0)} designs on sale vs ${tees.histProducts} that sold before → <b>${tees.choice >= 1 ? "+" : ""}${Math.round((tees.choice - 1) * 100)}%</b> at ${d.choice}.` : ""} <b>0</b> = no extra sales (the same total split more ways) · <b>0.3</b> = a little · <b>1</b> = each design brings its full share (unrealistic).`,
     extras: "Supplier price: the quote at your quantity (with its price breaks); type your own agreed price to replace it, clear it to go back. Then what each unit costs on top: embroidery or screen printing, your own labels and inbound shipping. Pre-filled from your cost sheet and label spend; change any figure and every colour of that product updates. Typing your own all-in cost on a colour (click its cost) overrides this.",
     popupcost: `Running costs for each pop-up that aren't stock: venue or stall fee, fit-out, staff, travel, card machine, bags and so on. Assumed at £1,500 a pop-up; change it if you know better. × ${state.demand.popups} pop-ups = ${gbp((state.popupCost || 0) * state.demand.popups)}, counted in Cash needed and the profit-after-everything tiles (not in each product's profit).`,
-    sizes: `Which past sales set the size split. The chance a sale is each size (p) comes from that item's past sales by size, with sizes that sold out topped up by the sold-out allowance (${Math.round(state.demand.soldout * 100)}%), steadied by your overall size pattern: with only a few sales it leans on the overall pattern, with many it follows the item. Pick a similar past product if it's a better match (e.g. an oversized fit). Your units follow p; type a number in any size to fix it and the rest re-split. Typing every size sets the colourway\'s units.`,
+    sizes: `Which past sales set the size split. The chance a sale is each size (p) comes from that item's past sales by size, with sizes that sold out topped up by the sold-out allowance (${Math.round(state.demand.soldout * 100)}%), steadied by your overall size pattern: with only a few sales it leans on the overall pattern, with many it follows the item. Pick a similar past product if it's a better match (e.g. an oversized fit). Your units follow p; type a number in any size to fix it and the rest re-split. Your sizes never change the units to buy: if they add up to more or less, the units box and the panel are flagged in red.`,
     old: `Your older stock (${Object.values(SEED.history || {}).map(h => `${(h.old || []).reduce((a, o) => a + o.units, 0)} ${h.label ? "" : ""}`).length ? Object.entries(SEED.history).map(([g, h]) => `${(h.old || []).reduce((a, o) => a + o.units, 0)} ${g.toLowerCase()}`).filter(t => !t.startsWith("0 ")).join(", ") : "none"}) will be on the table too, so it takes a share of each group's sales: each older design up to the units you still hold (a design with 1 left can't take much). Untick to see the new collection as if nothing else was on sale.`,
   };
   return T[key] || "";
@@ -533,7 +537,7 @@ function renderProducts() {
         ${lines.map(l => { const o = outcome(l, l.units); const nb = nextBreak(l);
           return `<tr class="${l === sel ? "sel" : ""}"><td class="l colour" data-pick="${esc(product)}|${l.id}"><div class="cell">${l.img ? `<img class="thumb" src="${l.img}" alt="" data-tip="<img src='${l.img}' style='width:200px;border-radius:6px;background:#fff;display:block'><div style='margin-top:6px'><b>${esc(l.product)}</b> ${esc(l.colour || "")}</div>">` : ""}<div><span>${esc(l.colour || "One colour")}</span><div>${sizeButton(l)}</div></div></div></td>
           <td data-label="Selling price">£<input data-line="${l.id}" data-f="price" value="${l.price}" class="${l.price !== l.seedPrice ? "changed" : ""}" style="width:56px"></td>
-          <td data-label="Units to buy"><span class="stepper"><button data-step="${l.id}|-1">−</button><input data-line="${l.id}" data-f="units" value="${l.units}"><button data-step="${l.id}|1">+</button></span></td>
+          <td data-label="Units to buy"><span class="stepper"><button data-step="${l.id}|-1">−</button><input data-line="${l.id}" data-f="units" value="${l.units}" class="${sizeGap(l) ? "gap" : ""}"><button data-step="${l.id}|1">+</button></span>${sizeGap(l) ? `<div class="hint gaptext" title="Your typed sizes add up to ${l.units + sizeGap(l)}, not the ${l.units} units to buy">sizes ${gapText(sizeGap(l))}</div>` : ""}</td>
           <td data-label="Expected sales"><input data-line="${l.id}" data-f="expected" value="${l.expectedManual != null ? l.expectedManual : ""}" placeholder="${l.expected}" class="${l.expectedManual != null ? "changed" : ""}" style="width:46px" title="Worked out from the whole-range demand. Type your own to fix it; clear the box to go back.">
             ${l.units > 0 && DEMAND[l.group] && DEMAND[l.group].total ? `<div class="hint">${Math.round(100 * l.expected / DEMAND[l.group].total)}% of ${esc(l.group.toLowerCase())}</div>` : ""}
             ${l.units > 0 && l.expectedManual == null ? `<div class="hint" title="Popularity vs the other colours of this product type: ×2 = expect it to sell twice as well, ×0.5 = half">pull × <input data-line="${l.id}" data-f="weight" value="${l.weight ?? 1}" style="width:38px;padding:1px 3px;font-size:11px" class="${(l.weight ?? 1) !== 1 ? "changed" : ""}"></div>` : ""}</td>
@@ -624,7 +628,6 @@ function setSizeQty(l, size, v) {
   if (v == null || v < 0) delete q[size]; else q[size] = Math.round(v);
   l.sizeQty = Object.keys(q).length ? q : null;
   const sum = Object.values(q).reduce((a, b) => a + b, 0);
-  if (l.sizeQty && (sizesOf(l).every(sz => q[sz] != null) || sum > l.units)) l.units = sum;  // your sizes set the total
 }
 function setSizes(l, text) {
   const list = [...new Set(String(text).split(/[\s,;/]+/).map(x => x.trim()).filter(Boolean).map(x => /^one/i.test(x) ? "One size" : x.toUpperCase()))].sort((a, b) => sizeRank(a) - sizeRank(b));
@@ -632,6 +635,13 @@ function setSizes(l, text) {
   if (l.sizeQty) { for (const k of Object.keys(l.sizeQty)) if (!sizesOf(l).includes(k)) delete l.sizeQty[k]; if (!Object.keys(l.sizeQty).length) l.sizeQty = null; }
 }
 // units changed by hand: typed sizes that no longer fit are cleared, and the sizes re-split
+function sizeGap(l) {
+  if (!l.sizeQty || sizesOf(l).length < 2) return 0;
+  const typed = Object.values(l.sizeQty).reduce((a, b) => a + b, 0);
+  if (typed > l.units) return typed - l.units;
+  return sizesOf(l).every(sz => l.sizeQty[sz] != null) ? typed - l.units : 0;  // every size typed and short of the units
+}
+function gapText(g) { return g > 0 ? `${g} over` : `${-g} under`; }
 function fitSizes(l) {
   if (!l.sizeQty) return;
   const sum = Object.values(l.sizeQty).reduce((a, b) => a + b, 0);
@@ -640,7 +650,8 @@ function fitSizes(l) {
 function sizeButton(l) {
   if (sizesOf(l).length < 2) return "";
   const mine = l.sizeQty ? ` · ${Object.keys(l.sizeQty).length} set by you` : "";
-  return `<button class="sizebtn ${openSizes[l.id] ? "on" : ""} ${l.sizeQty ? "mine" : ""}" data-sizes="${l.id}" title="Plan how many of each size to buy">Sizes ${openSizes[l.id] ? "▴" : "▾"}${mine}</button>`;
+  const g = sizeGap(l);
+  return `<button class="sizebtn ${openSizes[l.id] ? "on" : ""} ${l.sizeQty ? "mine" : ""} ${g ? "gap" : ""}" data-sizes="${l.id}" title="Plan how many of each size to buy">Sizes ${openSizes[l.id] ? "▴" : "▾"}${mine}${g ? ` · ${gapText(g)}` : ""}</button>`;
 }
 function basisOptions(l, cur) {
   const types = Object.keys(SH().types).filter(t => soldIn(SH().types[t]) > 0).sort();
@@ -661,7 +672,7 @@ function sizePanel(l) {
     <tr><td class="l">Share of past sales<div class="hint">${c.soldT} sold</div></td>${c.hist.map((v, i) => `<td title="${c.sold[i]} sold${c.out[i] ? ", sold out" : ""}">${c.soldT ? pct(v) : "–"}${c.out[i] ? "*" : ""}</td>`).join("")}<td>${c.soldT ? "100%" : "–"}</td></tr>
     <tr><td class="l">Already in stock (${esc(c.label)})</td>${c.stock.map(v => `<td>${v}</td>`).join("")}<td class="tot">${c.stock.reduce((a, b) => a + b, 0)}</td></tr>
     <tr><td class="l">Expected to sell</td>${exp.map(v => `<td>${v.toFixed(1)}</td>`).join("")}<td class="tot">${l.expected}</td></tr>
-    <tr><td class="l"><b>Your units</b><div class="hint"><span style="color:var(--exp);font-weight:700">yellow</span> = typed by you · dashed = follows p</div></td>${c.sizes.map((sz, i) => `<td><input data-line="${l.id}" data-f="size" data-size="${esc(sz)}" value="${mine[sz] != null ? mine[sz] : ""}" placeholder="${q[i]}" class="${mine[sz] != null ? "mine" : ""}" title="${mine[sz] != null ? "Typed by you; clear the box to go back to the split" : "Follows the chance of a sale; type to set it"}"></td>`).join("")}<td class="tot">${totalQ}</td></tr>
+    <tr><td class="l"><b>Your units</b><div class="hint"><span style="color:var(--exp);font-weight:700">yellow</span> = typed by you · dashed = follows p</div></td>${c.sizes.map((sz, i) => `<td><input data-line="${l.id}" data-f="size" data-size="${esc(sz)}" value="${mine[sz] != null ? mine[sz] : ""}" placeholder="${q[i]}" class="${mine[sz] != null ? "mine" : ""}" title="${mine[sz] != null ? "Typed by you; clear the box to go back to the split" : "Follows the chance of a sale; type to set it"}"></td>`).join("")}<td class="tot ${sizeGap(l) ? "gaptext" : ""}">${totalQ}${sizeGap(l) ? `<div class="hint gaptext">of ${l.units}</div>` : ""}</td></tr>
     </tbody></table>`;
   // chart: three bars per size on one % axis (p, past sales, your units as a share of the total)
   const W = 460, H = 210, pl = 40, pr = 8, pt = 18, pb = 26, mine2 = q.map(v => totalQ ? v / totalQ : 0);
@@ -679,10 +690,12 @@ function sizePanel(l) {
     svg += `<rect x="${pl + gw * i}" y="${pt}" width="${gw}" height="${H - pt - pb}" fill="transparent" data-tip="<b>${esc(sz)}</b><br>Chance a sale is ${esc(sz)}: <b>${pct(c.p[i])}</b><br>Past sales: ${c.sold[i]} of ${c.soldT}${c.soldT ? ` (${pct(c.hist[i])})` : ""}${c.out[i] ? ", sold out" : ""}<br>Your units: <b>${q[i]}</b> of ${totalQ} (${pct(mine2[i])})${mine[sz] != null ? " · typed by you" : ""}<br>Expected to sell ${exp[i].toFixed(1)}"/>`;
   });
   svg += `<line class="axis" x1="${pl}" x2="${W - pr}" y1="${y(0)}" y2="${y(0)}"/></svg>`;
-  const typed = c.sizes.filter(sz => mine[sz] != null);
+  const typed = c.sizes.filter(sz => mine[sz] != null), gap = sizeGap(l);
+  const gapNote = gap ? `<div class="gapnote">Your sizes add up to <b>${totalQ}</b>, ${gapText(gap)} the <b>${l.units}</b> units to buy. Change a size or the units so they match.</div>` : "";
   return `<div class="sizepanel" id="sizepanel-${l.id}">
     <div class="sizehead"><h3>Sizes · ${esc(l.product)}${l.colour ? ` · ${esc(l.colour)}` : ""}${typed.length ? `<span class="badge mine">your sizes: ${typed.map(esc).join(", ")}</span>` : `<span class="badge auto">automatic split</span>`}</h3>
       <div class="acts">${l.sizeQty ? `<button data-sizeclear="${l.id}">Clear my sizes</button>` : ""}<button data-sizeclose="${l.id}">Close</button><button class="on" data-sizeclose="${l.id}">Save &amp; close</button></div></div>
+    ${gapNote}
     <div class="ctl"><div><label>Size it like${qm("sizes")}</label><select data-line="${l.id}" data-f="sizeBasis">${basisOptions(l, c.basis)}</select></div>
       <div><label>Sizes offered</label><input data-line="${l.id}" data-f="sizes" value="${esc(c.sizes.join(", "))}" style="width:150px;text-align:left"></div>
       <div class="note" style="flex:1;min-width:220px">${totalQ} units split by ${l.sizeQty ? "your numbers, the rest by" : ""} the chance of a sale (${esc(c.label)}, ${c.soldT} sold${c.soldT < 10 ? `: few sales, so it leans on your overall size pattern` : ""}).
@@ -795,7 +808,6 @@ document.addEventListener("change", e => {
     else if (f === "cost") l.cost = v;
     else if (f === "expected") l.expectedManual = v != null && v >= 0 ? v : null;
     else if (v != null && v >= 0) l[f] = f === "units" ? Math.round(v) : v;
-    if (f === "units") fitSizes(l);
   }
   persist(); render();
   // still typing in that box: put the cursor back where it was
@@ -866,7 +878,7 @@ document.addEventListener("click", e => {
   const t = e.target.closest("[data-step],[data-pick],[data-edit-cost]");
   if (!t) return;
   applyTyping();
-  if (t.dataset.step) { const [id, d] = t.dataset.step.split("|"); const l = state.lines.find(x => x.id == id); l.units = Math.max(0, l.units + Number(d)); fitSizes(l); }
+  if (t.dataset.step) { const [id, d] = t.dataset.step.split("|"); const l = state.lines.find(x => x.id == id); l.units = Math.max(0, l.units + Number(d)); }
   if (t.dataset.pick) { const [p, id] = t.dataset.pick.split("|"); state.selected[p] = Number(id); }
   if (t.dataset.editCost) { const l = state.lines.find(x => x.id == t.dataset.editCost); l.cost = Math.round(costAt(l, l.units) * 100) / 100; }
   persist(); render();
