@@ -65,6 +65,7 @@ def history(conn, ledger):
     first, last = f["first_date"], f["last_date"]
     return {
         "history": groups,
+        "sizeHistory": size_history(v),
         "popupUnits": int(popup["quantity"].sum()),
         "popupOrders": int(popup["order_id"].nunique()),
         "popupNet": round(float(popup["net"].sum()), 2),
@@ -74,6 +75,22 @@ def history(conn, ledger):
                      "projected to the pop-ups + online, Dec 2026 – Mar 2027. Updated with every sync.")
         if pd.notna(first) else "No sales history yet.",
     }
+
+
+def size_history(v):
+    """Per size, for each product type and each past product: [units sold, sold out now (0/1), units in stock].
+    The planner turns this into the chance that a sale is each size."""
+    def sizes(pool):
+        g = pool.groupby("size").agg(units=("units", "sum"), out=("sold_out", "any"), stock=("on_hand", "sum"))
+        return {s: [int(r.units), int(bool(r.out)), int(r.stock)] for s, r in g.iterrows() if r.units > 0 or r.stock > 0}
+
+    v = v[v["size"] != "One size"]
+    products = {}
+    for title, pool in v.groupby("product_title"):
+        s = sizes(pool)
+        if s:
+            products[title] = {"type": pool["category"].iloc[0], "sizes": s}
+    return {"types": {t: sizes(pool) for t, pool in v.groupby("category")}, "products": products}
 
 
 def load(conn, plan_id=PLAN_ID):
@@ -115,7 +132,7 @@ def import_plan(conn, plan, by="import", replace_live=False):
     pics = {str(line["id"]): line.pop("img") for line in plan.get("lines", []) if line.get("img")}
     for line_id, data in pics.items():
         conn.execute("INSERT OR REPLACE INTO stock_plan_images (id, data) VALUES (?, ?)", (line_id, data))
-    for key in ("shareId", "sharedAt", "history", "popupUnits", "popupOrders", "popupNet", "coverage", "selected"):
+    for key in ("shareId", "sharedAt", "history", "popupUnits", "popupOrders", "popupNet", "coverage", "selected", "sizeHistory"):
         plan.pop(key, None)
     save(conn, json.loads(json.dumps(plan)), None, by, DEFAULT_ID)
     if replace_live or load(conn) is None:
