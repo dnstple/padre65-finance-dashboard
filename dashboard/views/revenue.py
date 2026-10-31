@@ -27,7 +27,7 @@ def _period_label(ts, freq):
 
 
 def _date_range(data):
-    """Start/end date pickers with quick presets. Used on this page instead of the sidebar Period filter."""
+    """Start/end date pickers with quick presets. Used on this page instead of the Period filter."""
     today = date.today()
     first_sale = data.loc[data["kind"] == "sale", "date"].min()
     first_sale = first_sale.date() if pd.notna(first_sale) else today

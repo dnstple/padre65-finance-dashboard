@@ -119,6 +119,9 @@ CREATE TABLE IF NOT EXISTS stock_plans (
 CREATE TABLE IF NOT EXISTS stock_plan_images (
     id TEXT PRIMARY KEY, data TEXT
 );
+CREATE TABLE IF NOT EXISTS stock_plan_history (
+    id TEXT PRIMARY KEY, data TEXT, updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS sync_log (
     source TEXT PRIMARY KEY, last_run TEXT, status TEXT, message TEXT
 );

@@ -3,13 +3,14 @@ from pathlib import Path
 
 import streamlit as st
 
-from common import conn, editor, heading, ledger, table
+from common import conn, data_status, editor, heading, ledger, table
 from tracker import categorise, config, costs, db
 
 
 def render():
     heading("Data & sync", "title")
     c = conn()
+    data_status()
 
     heading("Sync", "subheader")
     a, b = st.columns(2)

@@ -118,7 +118,7 @@ def pct(v):
 
 
 def period_filter():
-    """Sidebar date range. Returns (start, end) dates or (None, None) for all time."""
+    """Date range at the top of the page. Returns (start, end) dates or (None, None) for all time."""
     today = date.today()
     options = {
         "All time": (None, None),
@@ -128,10 +128,11 @@ def period_filter():
         "Year to date": (today.replace(month=1, day=1), today),
         "Custom": None,
     }
-    choice = st.sidebar.selectbox("Period", list(options), key="period",
-                                  help="Date range used by the reports on this page. Sales count on the order date, costs on the payment date.")
+    a, b, _ = st.columns([1, 1, 3])
+    choice = a.selectbox("Period", list(options), key="period",
+                         help="Date range used by the reports on this page. Sales count on the order date, costs on the payment date.")
     if choice == "Custom":
-        rng = st.sidebar.date_input("Date range", (today.replace(day=1), today), key="custom_range")
+        rng = b.date_input("Date range", (today.replace(day=1), today), key="custom_range")
         return (rng[0], rng[1]) if isinstance(rng, (list, tuple)) and len(rng) == 2 else (rng[0], rng[0])
     return options[choice]
 
@@ -242,10 +243,10 @@ def report_table(df, subtotals=(), fmt=None, definitions=None):
     )
 
 
-def sidebar_status():
+def data_status():
     c = conn()
     rows = c.execute("SELECT source, last_run, status, message FROM sync_log").fetchall()
-    with st.sidebar.expander("Data status", expanded=False):
+    with st.expander("Data status", expanded=False):
         if config.DATABASE_URL:
             host = config.DATABASE_URL.split("@")[-1].split("/")[0].split(":")[0]
             st.caption(f"🗄️ Database: Postgres ({'Supabase' if 'supabase' in host else host})")
