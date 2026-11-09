@@ -117,6 +117,8 @@ def images(conn):
 def save(conn, plan, base_version, by, plan_id=PLAN_ID):
     """Save the plan as the next version. If someone else saved since `base_version`, their notes are kept too."""
     current = load(conn, plan_id)
+    if current and "proposals" not in plan and current["plan"].get("proposals"):
+        plan["proposals"] = current["plan"]["proposals"]  # a page opened before a proposal was added doesn't drop it
     if current and current["version"] != base_version:
         logs = plan.setdefault("logs", {})
         for product, entries in (current["plan"].get("logs") or {}).items():

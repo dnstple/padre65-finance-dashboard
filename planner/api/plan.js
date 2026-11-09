@@ -36,9 +36,10 @@ async function save(req, res, user) {
   try {
     await client.query("BEGIN");
     const { rows } = await client.query("SELECT plan, version FROM stock_plans WHERE id = $1 FOR UPDATE", [PLAN_ID]);
-    const current = rows[0];
+    const current = rows[0], saved = current ? JSON.parse(current.plan) : {};
+    if (saved.proposals && !plan.proposals) plan.proposals = saved.proposals;  // a page opened before a proposal was added doesn't drop it
     if (current && Number(current.version) !== base) {
-      const theirs = JSON.parse(current.plan).logs || {}, logs = plan.logs = plan.logs || {};
+      const theirs = saved.logs || {}, logs = plan.logs = plan.logs || {};
       for (const [key, entries] of Object.entries(theirs)) {
         const mine = logs[key] = logs[key] || [], ids = new Set(mine.map(e => e.id));
         mine.push(...entries.filter(e => !ids.has(e.id)));

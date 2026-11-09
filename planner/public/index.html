@@ -135,6 +135,17 @@ tr.noteedit textarea { width: 100%; min-height: 70px; background: var(--surface)
 .gaptext { color: var(--bad) !important; font-weight: 700; }
 .gapnote { grid-column: 1 / -1; border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .sizelog { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 10px; }
+.proposal summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.proposal summary::-webkit-details-marker { display: none; }
+.proposal summary h2::before { content: "▸ "; color: var(--muted); }
+.proposal[open] summary h2::before { content: "▾ "; }
+.cmp { width: 100%; margin-top: 10px; }
+.cmp th, .cmp td { vertical-align: top; }
+.cmp td.sz { white-space: normal; font-size: 12.5px; color: var(--text-2); text-align: left; min-width: 150px; }
+.cmp tr.cat td { background: var(--surface-2); font-weight: 700; }
+.cmp .up { color: var(--good); font-weight: 700; } .cmp .down { color: var(--bad); font-weight: 700; }
+.cmp .flag { color: var(--bad); font-size: 12px; }
+.cmp .none { color: var(--muted); font-style: italic; }
 @container (max-width: 820px) {
   .ptable tr.sizerow { display: block; padding: 0 0 12px; }
   .ptable .sizetable thead { display: table-header-group; }
@@ -188,6 +199,7 @@ tr.noteedit textarea { width: 100%; min-height: 70px; background: var(--surface)
     <div id="overview"></div>
     <div class="note">Bars past the yellow marker are stock you'd still hold after the pop-ups; bars short of it may sell out.</div>
   </div>
+  <div id="proposals"></div>
   <div id="products"></div>
   <div class="note" id="foot"></div>
 </div>
@@ -396,7 +408,7 @@ function render() {
   computeDemand();
   document.getElementById("coverage").textContent = SEED.coverage;
   document.getElementById("saved").textContent = savedText();
-  renderSettings(); renderDemand(); renderExtras(); renderKpis(); renderOverview(); renderProducts();
+  renderSettings(); renderDemand(); renderExtras(); renderKpis(); renderOverview(); renderProposals(); renderProducts();
   document.getElementById("foot").innerHTML = SEED.foot;
   document.getElementById("theme").textContent = document.documentElement.dataset.theme === "light" ? "Dark" : "Light";
 }
@@ -720,6 +732,60 @@ function sizeLog(l) {
           <span class="acts"><button class="linkbtn" data-szedit="${l.id}|${e.id}">Edit</button><button class="linkbtn del" data-szdel="${l.id}|${e.id}">Delete</button></span></div>
           <div class="logtext">${esc(e.text)}</div></div>`).join("")}
   </div>`;
+}
+// ---------- proposals: someone's own line-up next to the shared plan ----------
+// state.proposals[name] = { at, note, notes: {category: text}, items: [{ cat, product, colour, line (plan line id or null), units, sizes: {size: n}, owned, note }] }
+const PROPOSAL_CAT = { Jacket: "Jackets", Knitwear: "Knitwear", Hoodie: "Hoodies", "Long Sleeve": "Long sleeve tees", "T-Shirt": "Short sleeve tees", Jeans: "Jeans", Cap: "Caps" };
+const PROPOSAL_ORDER = ["Jackets", "Knitwear", "Hoodies", "Long sleeve tees", "Short sleeve tees", "Jeans", "Caps"];
+function sizeStr(q) {
+  return Object.entries(q || {}).filter(([, v]) => v > 0).sort((a, b) => sizeRank(a[0]) - sizeRank(b[0])).map(([sz, v]) => `${v} ${esc(sz)}`).join(" · ");
+}
+function planSizeStr(l) {
+  if (!l.units) return "";
+  if (sizesOf(l).length < 2) return "one size";
+  const q = sizeSplit(l);
+  return sizeStr(Object.fromEntries(sizesOf(l).map((sz, i) => [sz, q[i]]))) + (l.sizeQty ? "" : ` <span class="none">(auto split)</span>`);
+}
+function renderProposals() {
+  const el = document.getElementById("proposals");
+  const names = Object.keys(state.proposals || {});
+  if (!names.length) { el.innerHTML = ""; return; }
+  el.innerHTML = names.map(name => proposalCard(name, state.proposals[name])).join("");
+}
+const lbl = (product, colour) => `${esc(product)}${colour ? ` · <b>${esc(colour)}</b>` : ""}`;
+function proposalCard(name, p) {
+  const items = p.items || [], used = new Set(items.map(i => i.line).filter(x => x != null));
+  const diff = d => d === 0 ? "same" : `<span class="${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${Math.abs(d)}</span>`;
+  const sumSizes = q => Object.values(q || {}).reduce((a, b) => a + b, 0);
+  let rows = "", planAll = 0, theirsAll = 0;
+  for (const cat of PROPOSAL_ORDER) {
+    const lines = state.lines.filter(l => PROPOSAL_CAT[l.type] === cat), mine = items.filter(i => i.cat === cat);
+    if (!lines.some(l => l.units > 0 || used.has(l.id)) && !mine.length) continue;
+    const planU = lines.reduce((a, l) => a + l.units, 0), theirU = mine.reduce((a, i) => a + (i.units || 0), 0);
+    planAll += planU; theirsAll += theirU;
+    rows += `<tr class="cat"><td class="l">${esc(cat)}${p.notes && p.notes[cat] ? `<div class="hint" style="font-weight:400">${esc(p.notes[cat])}</div>` : ""}</td><td>${planU}</td><td></td><td>${theirU}</td><td></td><td>${diff(theirU - planU)}</td><td></td></tr>`;
+    // matched colourways first, then plan colourways not in the proposal, then the proposal's new ones
+    const row = (label, l, i) => {
+      const pu = l ? l.units : null, tu = i ? (i.units || 0) : null;
+      const flags = [];
+      if (i && i.sizes && sumSizes(i.sizes) && sumSizes(i.sizes) !== i.units) flags.push(`sizes add up to ${sumSizes(i.sizes)}, not ${i.units}`);
+      if (i && i.note) flags.push(esc(i.note));
+      return `<tr><td class="l">${label}</td>
+        <td>${l ? pu : `<span class="none">not in plan</span>`}</td><td class="sz">${l ? planSizeStr(l) : ""}</td>
+        <td>${i ? (i.units != null ? tu : "–") : `<span class="none">not in ${esc(name)}'s</span>`}${i && i.owned ? `<div class="hint">${esc(String(i.owned))} owned</div>` : ""}</td><td class="sz">${i ? sizeStr(i.sizes) : ""}</td>
+        <td>${l && i ? diff(tu - pu) : l ? (pu ? diff(-pu) : "") : (tu ? diff(tu) : "")}</td><td class="sz">${flags.map(f => `<div class="${/add up/.test(f) ? "flag" : ""}">${f}</div>`).join("")}</td></tr>`;
+    };
+    for (const i of mine.filter(i => i.line != null)) { const l = state.lines.find(x => x.id == i.line); rows += row(lbl(l ? l.product : i.product, l ? l.colour : i.colour), l, i); }
+    for (const l of lines.filter(l => !used.has(l.id) && l.units > 0)) rows += row(lbl(l.product, l.colour), l, null);
+    for (const i of mine.filter(i => i.line == null)) rows += row(lbl(i.product, i.colour), null, i);
+  }
+  return `<details class="card proposal" open><summary><h2 style="margin:0">${esc(name)}'s proposal vs the shared plan</h2>
+      <span class="note">added ${fmtWhen(p.at)} · ${theirsAll} units to buy vs ${planAll} in the plan (${diff(theirsAll - planAll)})</span></summary>
+    ${p.note ? `<div class="note" style="margin-top:6px">${esc(p.note)}</div>` : ""}
+    <div class="tablewrap" style="overflow-x:auto"><table class="cmp"><thead><tr><th class="l">Product · colour</th><th>Plan units</th><th class="l">Plan sizes</th><th>${esc(name)}'s units</th><th class="l">${esc(name)}'s sizes</th><th>Difference</th><th class="l">Notes</th></tr></thead>
+    <tbody>${rows}<tr class="tot"><td class="l">All products</td><td>${planAll}</td><td></td><td>${theirsAll}</td><td></td><td>${diff(theirsAll - planAll)}</td><td></td></tr></tbody></table></div>
+    <div class="note" style="margin-top:6px">Read-only comparison: the shared plan above is unchanged. Colours are matched only where the names agree; anything else shows as "not in plan" / "not in ${esc(name)}'s".</div>
+  </details>`;
 }
 function nextBreak(l) {
   if (l.cost != null || l.supplierOverride != null) return "";
